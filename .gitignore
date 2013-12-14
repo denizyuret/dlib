@@ -1,6 +1,6 @@
 # Temporary files
 download/
-test/
+*~
 
 # Object files
 *.o
