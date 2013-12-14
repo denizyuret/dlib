@@ -1,0 +1,14 @@
+2013-12-14    <dyuret@ku.edu.tr>
+
+	* dlib: Deniz's library.  glib disappoints.  code blows up without
+	error when hash and array sizes increase.  unacceptable.  have to
+	write my own version.  need hashes and dynamic arrays.  foreach
+	macros and error mechanism.  code using dlib should be easy to
+	read.  should not rely on gnu extensions, although it would be
+	nice to have obstacks, error, malloc debugging etc.  just the c99
+	(or c11) standard, cannot do without declarations in code, stdint
+	seems useful etc.  no warnings with pedantic.  inspired by sglib,
+	define most things as macros.  have documentation in dlib.h, avoid
+	dlib.c if you can.
+
+
