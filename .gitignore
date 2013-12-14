@@ -1,3 +1,6 @@
+# Temporary files
+download/
+
 # Object files
 *.o
 *.ko
