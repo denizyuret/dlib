@@ -1,14 +1,38 @@
 2013-12-14    <dyuret@ku.edu.tr>
 
-	* dlib: Deniz's library.  glib disappoints.  code blows up without
-	error when hash and array sizes increase.  unacceptable.  have to
-	write my own version.  need hashes and dynamic arrays.  foreach
-	macros and error mechanism.  code using dlib should be easy to
-	read.  should not rely on gnu extensions, although it would be
-	nice to have obstacks, error, malloc debugging etc.  just the c99
-	(or c11) standard, cannot do without declarations in code, stdint
-	seems useful etc.  no warnings with pedantic.  inspired by sglib,
-	define most things as macros.  have documentation in dlib.h, avoid
-	dlib.c if you can.
+	* sglib: Here is the philosophy behind sglib:
+	let's take a program defining an array of two-dimensional points
+	represented by their coordinates:
+
+	struct point {
+	   int x;
+	   int y;
+	} thePointArray[SIZE];
+
+	and a macro defining lexicographical ordering on points:
+
+	#define CMP_POINT(p1,p2) ((p1.x!=p2.x)?(p1.x-p2.x):(p1.y-p2.y))
+
+	In such case the following line of code is sorting the array using
+	heap sort:
+
+	  SGLIB_ARRAY_SINGLE_HEAP_SORT(struct point, thePointArray, SIZE, CMP_POINT);
+
+	Note that no pointers are involved in this implementation.
+
+	This is great.  But it is ugly.  We'd like sort(thePointArray) if
+	possible.  Also somebody needs to take care of malloc, resize
+	etc.  What is the best way to do this for a hash?
+
+	* dlib: Deniz's C library.  glib disappoints.  code blows up
+	without error when hash and array sizes increase.  unacceptable.
+	have to write my own version.  need hashes (symbols?) and dynamic
+	arrays.  foreach macros and error mechanism.  code using dlib
+	should be easy to read.  should not rely on gnu extensions,
+	although it would be nice to have obstacks, error, malloc
+	debugging etc.  just the c99 or c11 standard, cannot do without
+	declarations in code, stdint, bool seem useful etc.  aim no
+	warnings with pedantic.  inspired by sglib, define most things as
+	macros.  have documentation in dlib.h, avoid dlib.c if you can.
 
 
