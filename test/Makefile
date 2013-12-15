@@ -1,16 +1,17 @@
 CC=gcc
-#CFLAGS=-g -std=c99 -pedantic -save-temps -Wall -Wextra -Wshadow -fmudflap
-#CFLAGS=-g -std=c99 -pedantic -save-temps -Wall -Wextra -Wshadow
-CFLAGS=-g -std=c99 -pedantic -Wall -Wextra -Wshadow
+#CFLAGS=-g -std=c99 -pedantic -save-temps -Wall -Wextra -Wshadow -Winline -fmudflap
+#CFLAGS=-g -std=c99 -pedantic -Wall -Wextra -Wshadow -Winline
+CFLAGS=-g -save-temps -D_GNU_SOURCE -std=c99 -pedantic -Wall -Wextra -Wshadow -Winline
+LIBS=-lz
 
-all: foreach_line
+all: test_forline test_getline
 
-%.o: %.c
-	$(CC) $(CFLAGS) $^ -o $@
+test_%: test_%.o dlib.o
+	$(CC) $(CFLAGS) -o $@ $^ $(LIBS)
 
-foreach_line: foreach_line.o
-	$(CC) $(CFLAGS) $^ -o $@
+%.o: %.c dlib.h
+	$(CC) -c $(CFLAGS) -o $@ $<
 
 clean:
-	-rm *.o *.i *.s
-	-rm foreach_line
+	-rm *.o *.i *.s *~
+	-rm test_forline test_getline

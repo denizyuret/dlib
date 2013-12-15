@@ -1,6 +1,11 @@
 # Temporary files
+unused/
 download/
 *~
+
+# -save-temps
+*.i
+*.s
 
 # Object files
 *.o

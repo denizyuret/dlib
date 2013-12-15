@@ -1,5 +1,18 @@
 2013-12-14    <dyuret@ku.edu.tr>
 
+	* foreach_line: NULL seems to cause compiler problems, represent
+	stdin with "".  Arbitrary limit on line length disturbing, could
+	use GNU getline instead, which has a much nicer interface.  Two
+	problems: we did not want to depend on GNU extensions (which can
+	be solved by including getline code in dlib).  Also we added zlib
+	support, which has gzgets but not gzgetline!  Better check the
+	implementation of getline.
+
+	OK, getline uses internals of the *FILE pointer.  A more portable
+	implementation would be to base it on fgets.  However it turns out
+	c99 does not even define popen!  It seems I will have to use
+	_GNU_SOURCE after all?
+
 	* sglib: Here is the philosophy behind sglib:
 	let's take a program defining an array of two-dimensional points
 	represented by their coordinates:
@@ -30,9 +43,9 @@
 	arrays.  foreach macros and error mechanism.  code using dlib
 	should be easy to read.  should not rely on gnu extensions,
 	although it would be nice to have obstacks, error, malloc
-	debugging etc.  just the c99 or c11 standard, cannot do without
-	declarations in code, stdint, bool seem useful etc.  aim no
-	warnings with pedantic.  inspired by sglib, define most things as
-	macros.  have documentation in dlib.h, avoid dlib.c if you can.
+	debugging, getline etc.  just the c99 or c11 standard, cannot do
+	without declarations in code, stdint, bool seem useful etc.  aim
+	no warnings with pedantic.  inspired by sglib, define most things
+	as macros.  have documentation in dlib.h, avoid dlib.c if you can.
 
 
