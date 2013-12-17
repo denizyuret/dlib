@@ -62,8 +62,9 @@ extern char *d_gets(D_FILE f);
    (i.e. multiple nested fortok loops are ok).  fortok3 takes an
    additional argument d to specify delimiter characters.  Example:
 
-   fortok (tok, "To be    or not") {
-     printf("%s:", tok); // prints To:be:or:not
+   char *str = strdup("  To be    or not");
+   fortok (tok, str) {
+     printf("%s:", tok); // prints To:be:or:not:
    }
 
 */
@@ -73,7 +74,8 @@ extern char *d_gets(D_FILE f);
 #define fortok3(t, s, d)						\
   for (char *t = (s)+strspn((s),(d)), *_p_ = strpbrk(t, (d));		\
        ((*t != '\0') && ((_p_ == NULL) || (*_p_ = '\0', _p_++)));	\
-       t = (_p_)+strspn(_p_,(d)), _p_ = strpbrk(t, (d)))
+       ((_p_ == NULL) ? t += strlen(t) :				\
+	(t = (_p_)+strspn(_p_,(d)), _p_ = strpbrk(t, (d)))))
 
 
 /* TODO:
