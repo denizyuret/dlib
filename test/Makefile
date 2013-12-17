@@ -4,7 +4,7 @@ CC=gcc
 CFLAGS=-g -save-temps -D_GNU_SOURCE -std=c99 -pedantic -Wall -Wextra -Wshadow -Winline
 LIBS=-lz
 
-all: test_forline test_getline
+all: test_forline test_getline test_fortok
 
 test_%: test_%.o dlib.o
 	$(CC) $(CFLAGS) -o $@ $^ $(LIBS)
@@ -14,4 +14,4 @@ test_%: test_%.o dlib.o
 
 clean:
 	-rm *.o *.i *.s *~
-	-rm test_forline test_getline
+	-rm test_forline test_getline test_fortok

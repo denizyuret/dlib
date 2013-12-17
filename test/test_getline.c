@@ -11,10 +11,10 @@ struct D_FILE_S {
 };
 
 int main(int argc, char **argv) {
-  char *fname = (argc == 1) ? "" : argv[1];
+  char *fname = (argc == 1) ? NULL : argv[1];
   D_FILE f = d_open(fname);
   for (;;) {
-    char *buf = d_getline(f);
+    char *buf = d_gets(f);
     if (buf == NULL) break;
     error(0, 0, "len=%zd cap=%zu line=[%s]", strlen(buf), f->size, f->line);
     fputs(buf, stdout);
