@@ -116,10 +116,10 @@ static inline size_t split(char *str, int sep, char **argv, size_t argv_len) {
 typedef struct _pre##tab_s {						\
   _etype *data;								\
   uint64_t bits;							\
-} *_pre##tab_t;							\
+} *_pre##tab_t;								\
 									\
 static inline _pre##tab_t _pre##new(size_t n) {			\
-  _pre##tab_t h = d_malloc(sizeof(struct _pre##tab_s));		\
+  _pre##tab_t h = d_malloc(sizeof(struct _pre##tab_s));			\
   size_t b; for (b = 0; (1ULL << b) < n; b++);				\
   h->bits = (b << D_HBIT);						\
   size_t cap = (1ULL << b);						\
@@ -163,8 +163,8 @@ static inline _etype *_pre##get(_pre##tab_t h, _ktype k, bool insert) { \
 									\
   if (!insert) return NULL;						\
 									\
-  if (((cap <= D_HMIN) && (len == cap)) ||				\
-      ((cap > D_HMIN)  && (len > (cap >> 1) + (cap >> 2)))) {		\
+  if (((cap <= D_HMIN) && (len >= (cap - 1))) ||			\
+      ((cap > D_HMIN)  && (len >= (cap >> 1) + (cap >> 2)))) {		\
     d_hdbl(h);								\
     size_t cap2 = d_hcap(h);						\
     if (cap2 <= D_HMIN) {						\
@@ -189,8 +189,8 @@ static inline _etype *_pre##get(_pre##tab_t h, _ktype k, bool insert) { \
   return &(h->data[idx]);						\
 }
 
-#define D_HBIT 58
-#define D_HMIN 16
+#define D_HBIT 58		// don't touch this!
+#define D_HMIN 16		// anything larger slows down, smaller indifferent
 #define d_hcap(h) (1ULL << ((h)->bits >> D_HBIT))
 #define d_hlen(h) ((h)->bits & ((1ULL << D_HBIT) - 1))
 #define d_hdbl(h) ((h)->bits += (1ULL << D_HBIT))
@@ -201,30 +201,34 @@ extern size_t fnv1a(const char *k);
 
 // Define some common hash types
 #define d_strmatch(a,b) (!strcmp((a),(b)))
+#define d_eqmatch(a,b) ((a)==(b))
 #define d_keyof(a) ((a).key)
 #define d_keyisnull(a) ((a).key==NULL)
 #define d_keymknull(a) ((a).key=NULL)
 #define d_isnull(a) ((a)==NULL)
 #define d_mknull(a) ((a)=NULL)
 #define d_ident(a) (a)
+typedef char *d_cptr;
+
 #define D_STRHASH(h, etype, einit) \
-  D_HASH(h, etype, char*, d_strmatch, fnv1a, d_keyof, einit, d_keyisnull, d_keymknull)
-#define forstrhash(etype, e, h) \
-  for (size_t _I_ = d_hcap(h), _i_ = 0; _i_ < _I_; _i_++) \
-    for (etype e = (h)->data[_i_]; e.key != NULL; e.key = NULL)
+  D_HASH(h, etype, d_cptr, d_strmatch, fnv1a, d_keyof, einit, d_keyisnull, d_keymknull)
 
 #define D_STRSET(h) \
-  D_HASH(h, char*, char*, d_strmatch, fnv1a, d_ident, strdup, d_isnull, d_mknull)
-#define forstrset(s, h) \
-  for (size_t _J_ = d_hcap(h), _j_ = 0; _j_ < _J_; _j_++) \
-    for (char *s = (h)->data[_j_]; s != NULL; s = NULL)
+  D_HASH(h, d_cptr, d_cptr, d_strmatch, fnv1a, d_ident, strdup, d_isnull, d_mknull)
 
+#define forhash(etype, e, h, isnull) \
+  for (size_t _I_ = d_hcap(h), _i_ = 0; _i_ < _I_; _i_++) \
+    for (etype (*_p_) = (h)->data, e = _p_[_i_]; !isnull(e) && (_p_ != NULL); _p_ = NULL)
+
+#define forstrset(s, h) forhash(d_cptr, s, h, d_isnull)    
+
+#define forstrhash(etype, e, h) forhash(etype, e, h, d_keyisnull)
 
 /* TODO:
-   forhash
-   symbol
+   double hash?
+   symbol table?
    dynamic array
-   heap
+   heap with linear heapify
  */
 
 #endif  // #ifndef __DLIB_H__

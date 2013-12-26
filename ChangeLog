@@ -1,3 +1,20 @@
+2013-12-26    <dyuret@ku.edu.tr>
+
+	* dlib.h: Hash tables implemented.  Still ugly and general for
+	loop not possible because of types being general.  Experiments
+	show that the linear search idea does not make a difference for
+	D_HMIN 0-16, slows down for D_HMIN > 16.  Counting bigrams on
+	wsj.tok.gz (5187874 126170376 690948662) takes 35 seconds (5 secs
+	zcat, 5 secs forline etc) and 212M memory.  Vocab size is 608467
+	and uniq bigrams are 10755423.  Space is dominated by uniq
+	bigrams, the total hash table space allocated is for 20252586
+	bigrams (costing 8 bytes each), almost double the necessary
+	amount.  test_bigram spends 16 bytes, test_symtable 8 bytes by
+	using a symbol table.  Might be worth considering sparsehash for
+	small tables, which could halve the memory.  Also might be worth
+	experimenting with obstacks.  Should continue reimplementing
+	features.pl in C.
+
 2013-12-14    <dyuret@ku.edu.tr>
 
 	* foreach_line: NULL seems to cause compiler problems, represent
