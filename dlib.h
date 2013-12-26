@@ -169,10 +169,11 @@ static inline _etype *_pre##get(_pre##tab_t h, _ktype k, bool insert) { \
     size_t cap2 = d_hcap(h);						\
     if (cap2 <= D_HMIN) {						\
       h->data = d_realloc(h->data, cap2 * sizeof(_etype));		\
+      for (size_t i = len; i < cap2; _mknull(h->data[i++]));		\
     } else {								\
       _etype *xdata = h->data;						\
       h->data = d_malloc(cap2 * sizeof(_etype));			\
-      for (size_t i = cap2; i-- != 0; _mknull(h->data[i]));		\
+      for (size_t i = 0; i < cap2; _mknull(h->data[i++]));		\
       for (size_t j = cap; j-- != 0; ) {				\
 	if (_isnull(xdata[j])) continue;				\
 	size_t i = _pre##idx(h, _keyof(xdata[j]));			\
@@ -209,14 +210,14 @@ extern size_t fnv1a(const char *k);
 #define D_STRHASH(h, etype, einit) \
   D_HASH(h, etype, char*, d_strmatch, fnv1a, d_keyof, einit, d_keyisnull, d_keymknull)
 #define forstrhash(etype, e, h) \
-  for (size_t _n_ = d_hcap(h), _i_ = 0; _i_ < _n_; _i_++) \
+  for (size_t _I_ = d_hcap(h), _i_ = 0; _i_ < _I_; _i_++) \
     for (etype e = (h)->data[_i_]; e.key != NULL; e.key = NULL)
 
 #define D_STRSET(h) \
   D_HASH(h, char*, char*, d_strmatch, fnv1a, d_ident, strdup, d_isnull, d_mknull)
 #define forstrset(s, h) \
-  for (size_t _n_ = d_hcap(h), _i_ = 0; _i_ < _n_; _i_++) \
-    for (char *s = (h)->data[_i_]; s != NULL; s = NULL)
+  for (size_t _J_ = d_hcap(h), _j_ = 0; _j_ < _J_; _j_++) \
+    for (char *s = (h)->data[_j_]; s != NULL; s = NULL)
 
 
 /* TODO:
