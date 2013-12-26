@@ -1,10 +1,21 @@
 CC=gcc
 #CFLAGS=-g -std=c99 -pedantic -save-temps -Wall -Wextra -Wshadow -Winline -fmudflap
 #CFLAGS=-g -std=c99 -pedantic -Wall -Wextra -Wshadow -Winline
-CFLAGS=-g -save-temps -D_GNU_SOURCE -std=c99 -pedantic -Wall -Wextra -Wshadow -Winline
+CFLAGS=-O3 -save-temps -D_GNU_SOURCE -std=c99 -pedantic -Wall -Wextra -Wshadow -Winline
 LIBS=-lz
 
-all: test_forline test_getline test_fortok
+TEST= \
+test_getline \
+test_forline \
+test_fortok \
+test_sizeof \
+test_hash \
+test_fnv1a \
+test_wc \
+test_strset \
+test_wfreq
+
+all: ${TEST}
 
 test_%: test_%.o dlib.o
 	$(CC) $(CFLAGS) -o $@ $^ $(LIBS)
@@ -14,4 +25,4 @@ test_%: test_%.o dlib.o
 
 clean:
 	-rm *.o *.i *.s *~
-	-rm test_forline test_getline test_fortok
+	-rm ${TEST}

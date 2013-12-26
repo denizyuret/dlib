@@ -57,14 +57,21 @@ static int d_gzfile(const char *f) {
 }
 #endif
 
-static void *d_malloc(size_t size) {
+void *d_malloc(size_t size) {
   void *ptr = malloc(size);
   if (ptr == NULL) 
     die("Cannot allocate %zu bytes", size);
   return ptr;
 }
 
-static void *d_realloc(void *ptr, size_t size) {
+void *d_calloc(size_t nmemb, size_t size) {
+  void *ptr = calloc(nmemb, size);
+  if (ptr == NULL) 
+    die("Cannot allocate %zu bytes", nmemb*size);
+  return ptr;
+}
+
+void *d_realloc(void *ptr, size_t size) {
   void *ptr2 = realloc(ptr, size);
   if (ptr2 == NULL) 
     die("Cannot allocate %zu bytes", size);
@@ -153,3 +160,14 @@ char *d_gets(D_FILE p) {
     return p->line;
   }
 }
+
+size_t fnv1a(const char *k) {
+  size_t hash = 14695981039346656037ULL;
+  uint8_t *p = (uint8_t *) k;
+  while (*p != 0) {
+    hash ^= *p++;
+    hash *= 1099511628211ULL;
+  }
+  return hash;
+}
+
