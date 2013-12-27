@@ -17,7 +17,7 @@
 
 /* msg and die support code */
 
-void d_error(int status, int errnum, const char *format, ...) {
+void _d_error(int status, int errnum, const char *format, ...) {
   fflush(stdout);
   static time_t t0 = 0;
   time_t t1 = time(NULL);
@@ -39,15 +39,15 @@ void d_error(int status, int errnum, const char *format, ...) {
 
 /* forline support code */
 
-struct D_FILE_S {
+struct _D_FILE_S {
   void *fptr;
-  enum { D_STDIN, D_POPEN, D_FOPEN, D_GZOPEN } type;
+  enum { _D_STDIN, _D_POPEN, _D_FOPEN, _D_GZOPEN } type;
   size_t size;
   char *line;
 };
 
 #if D_HAVE_ZLIB
-static int d_gzfile(const char *f) {
+static int _d_gzfile(const char *f) {
   FILE *fp = fopen(f, "r");
   if (fp == NULL) return 0;
   int c1 = fgetc(fp);
@@ -57,47 +57,47 @@ static int d_gzfile(const char *f) {
 }
 #endif
 
-void *d_malloc(size_t size) {
+void *_d_malloc(size_t size) {
   void *ptr = malloc(size);
   if (ptr == NULL) 
     die("Cannot allocate %zu bytes", size);
   return ptr;
 }
 
-void *d_calloc(size_t nmemb, size_t size) {
+void *_d_calloc(size_t nmemb, size_t size) {
   void *ptr = calloc(nmemb, size);
   if (ptr == NULL) 
     die("Cannot allocate %zu bytes", nmemb*size);
   return ptr;
 }
 
-void *d_realloc(void *ptr, size_t size) {
+void *_d_realloc(void *ptr, size_t size) {
   void *ptr2 = realloc(ptr, size);
   if (ptr2 == NULL) 
     die("Cannot allocate %zu bytes", size);
   return ptr2;
 }
 
-D_FILE d_open(const char *f) {
-  D_FILE p = d_malloc(sizeof(struct D_FILE_S));
+_D_FILE _d_open(const char *f) {
+  _D_FILE p = _d_malloc(sizeof(struct _D_FILE_S));
   p->size = 0;
   p->line = NULL;
   if (f == NULL) {
     p->fptr = stdin;
-    p->type = D_STDIN;
+    p->type = _D_STDIN;
 #if D_HAVE_POPEN
   } else if (*f == '<') {
     p->fptr = popen(f+1, "r");
-    p->type = D_POPEN;
+    p->type = _D_POPEN;
 #endif
 #if D_HAVE_ZLIB
-  } else if (d_gzfile(f)) {
+  } else if (_d_gzfile(f)) {
     p->fptr = gzopen(f, "r");
-    p->type = D_GZOPEN;
+    p->type = _D_GZOPEN;
 #endif
   } else {
     p->fptr = fopen(f, "r");
-    p->type = D_FOPEN;
+    p->type = _D_FOPEN;
   }
   if (p->fptr == NULL) {
     die("Cannot open %s", f);
@@ -105,32 +105,32 @@ D_FILE d_open(const char *f) {
   return p;
 }
 
-void d_close(D_FILE p) {
+void _d_close(_D_FILE p) {
   free(p->line);
   switch(p->type) {
-  case D_FOPEN: fclose(p->fptr); break;
+  case _D_FOPEN: fclose(p->fptr); break;
 #if D_HAVE_POPEN
-  case D_POPEN: pclose(p->fptr); break;
+  case _D_POPEN: pclose(p->fptr); break;
 #endif
 #if D_HAVE_ZLIB   
-  case D_GZOPEN: gzclose(p->fptr); break;
+  case _D_GZOPEN: gzclose(p->fptr); break;
 #endif
   default: break;
   }
   free(p);
 }
 
-char *d_gets(D_FILE p) {
+char *_d_gets(_D_FILE p) {
   if (p == NULL) return NULL;
 #if D_HAVE_GETLINE
-  if (p->type != D_GZOPEN) {
+  if (p->type != _D_GZOPEN) {
     ssize_t ret = getline(&(p->line), &(p->size), p->fptr);
     return ((ret == -1) ? NULL : p->line);
   }
 #endif
   if (p->line == NULL || p->size == 0) {
     p->size = 120;
-    p->line = d_malloc(p->size);
+    p->line = _d_malloc(p->size);
   }
   char *ptr = p->line;
   size_t len = p->size;
@@ -139,7 +139,7 @@ char *d_gets(D_FILE p) {
     ptr[0] = 0;
     ptr[len-1] = 1; // This will become 0 if line too long
 #if D_HAVE_ZLIB
-    if (p->type == D_GZOPEN)
+    if (p->type == _D_GZOPEN)
       ret = gzgets(p->fptr, ptr, len);
     else
 #endif
@@ -149,7 +149,7 @@ char *d_gets(D_FILE p) {
       if (ptr[len-2] == '\n') break; // Just finished a line
       size_t oldn = p->size;
       p->size <<= 1;
-      p->line = d_realloc(p->line, p->size);
+      p->line = _d_realloc(p->line, p->size);
       ptr = &(p->line)[oldn-1];
       len = oldn + 1;
     }
@@ -171,3 +171,93 @@ size_t fnv1a(const char *k) {
   return hash;
 }
 
+/* fast memory allocation */
+/* only way to free is to free everything */
+
+#define _D_MSIZE (1<<20)
+static char *_d_mlast = NULL;
+static char *_d_mfree = NULL;
+static size_t _d_mleft = 0;
+#define _d_mnext(m) (*((ptr_t*)(m)))
+
+ptr_t dalloc(size_t size) {
+  char *ptr;
+  if (size <= _d_mleft) {
+    ptr = _d_mfree;
+    _d_mfree += size;
+    _d_mleft -= size;
+  } else if (size <= (_D_MSIZE >> 1)) {
+    ptr_t old = _d_mlast;
+    _d_mlast = _d_malloc(_D_MSIZE + sizeof(ptr_t));
+    _d_mnext(_d_mlast) = old;
+    ptr = _d_mlast + sizeof(ptr_t);
+    _d_mfree = ptr + size;
+    _d_mleft = _D_MSIZE - size;
+  } else {
+    ptr = _d_malloc(size + sizeof(ptr_t));
+    if (_d_mlast == NULL) {
+      _d_mnext(ptr) = NULL;
+      _d_mlast = ptr;
+    } else {
+      _d_mnext(ptr) = _d_mnext(_d_mlast);
+      _d_mnext(_d_mlast) = ptr;
+    }
+    ptr += sizeof(ptr_t);
+  }
+  return ptr;
+}
+
+void dfreeall() {
+  while (_d_mlast != NULL) {
+    ptr_t p = _d_mnext(_d_mlast);
+    free(_d_mlast);
+    _d_mlast = p;
+  }
+}
+
+str_t dstrdup (const str_t s) {
+  size_t len = strlen (s) + 1;
+  str_t new = dalloc (len);
+  return (str_t) memcpy (new, s, len);
+}
+
+/* symbol table */
+
+static darr_t _d_strtable;
+static darr_t _d_symtable;
+
+#define _d_sym2str(u) (((str_t *)(_d_strtable->data))[u-1])
+#define _d_iszero(u) ((u)==0)
+#define _d_mkzero(u) ((u)=0)
+
+static sym_t _d_syminit(const char *s) {
+  if (_d_strtable == NULL) _d_strtable = darr_new(0, sizeof(str_t));
+  size_t l = len(_d_strtable);
+  val(str_t, _d_strtable, l) = strdup(s);
+  return l+1;
+}
+
+D_HASH(_d_sym, sym_t, str_t, d_strmatch, fnv1a, _d_sym2str, _d_syminit, _d_iszero, _d_mkzero)
+
+sym_t str2sym(const str_t str, bool insert) {
+  if (_d_symtable == NULL) _d_symtable = _d_symnew(0);
+  sym_t *p = _d_symget(_d_symtable, str, insert);
+  return ((p == NULL) ? 0 : (*p));
+}
+
+str_t sym2str(sym_t sym) {
+  if ((sym == 0) || (_d_strtable == NULL) || (len(_d_strtable) < sym)) {
+    return NULL;
+  } else {
+    return (((str_t *)(_d_strtable->data))[sym - 1]);
+  }
+}
+
+void symdbg() {
+  msg("str_t=%lu", sizeof(str_t));
+  msg("sym_t=%lu", sizeof(sym_t));
+  msg("strcap=%lu", _d_strtable == NULL ? 0 : cap(_d_strtable));
+  msg("strlen=%lu", _d_strtable == NULL ? 0 : len(_d_strtable));
+  msg("symcap=%lu", _d_symtable == NULL ? 0 : cap(_d_symtable));
+  msg("symlen=%lu", _d_symtable == NULL ? 0 : len(_d_symtable));
+}

@@ -3,18 +3,18 @@
 #include <error.h>
 #include "dlib.h"
 
-struct D_FILE_S {
+struct _D_FILE_S {
   void *fptr;
-  enum { D_STDIN, D_POPEN, D_FOPEN, D_GZOPEN } type;
+  enum { _D_STDIN, _D_POPEN, _D_FOPEN, _D_GZOPEN } type;
   size_t size;
   char *line;
 };
 
 int main(int argc, char **argv) {
   char *fname = (argc == 1) ? NULL : argv[1];
-  D_FILE f = d_open(fname);
+  _D_FILE f = _d_open(fname);
   for (;;) {
-    char *buf = d_gets(f);
+    char *buf = _d_gets(f);
     if (buf == NULL) break;
     error(0, 0, "len=%zd cap=%zu line=[%s]", strlen(buf), f->size, f->line);
     fputs(buf, stdout);

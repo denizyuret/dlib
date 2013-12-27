@@ -6,7 +6,7 @@ D_STRSET(h)
 int main(int argc, char **argv) {
   char *fname = (argc == 1) ? NULL : argv[1];
   msg("Reading %s", fname == NULL ? "stdin" : fname);
-  htab_t h = hnew(0);
+  darr_t h = hnew(0);
   forline(buf, fname) {
     fortok(tok, buf) {
       hget(h, tok, 1);
@@ -18,6 +18,6 @@ int main(int argc, char **argv) {
     free(s);
   }
   msg("Free hash table...");
-  hfree(h);
+  darr_free(h);
   msg("done");
 }

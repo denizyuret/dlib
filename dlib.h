@@ -25,7 +25,11 @@
 #include <stdint.h>		/* uint8_t etc. */
 #include <stdbool.h>		/* bool, true, false */
 #include <errno.h>		/* errno */
+#include <assert.h>		/* assert */
 
+/* Define some convenience types */
+typedef char *str_t;
+typedef void *ptr_t;
 
 /* msg and die write runtime and memory info, a formatted string, and
    any system error message to stderr.  The only difference is die
@@ -35,9 +39,9 @@
 
 */
 
-extern void d_error(int status, int errnum, const char *format, ...);
-#define msg(...) d_error(EXIT_SUCCESS, errno, __VA_ARGS__)
-#define die(...) d_error(EXIT_FAILURE, errno, __VA_ARGS__)
+extern void _d_error(int status, int errnum, const char *format, ...);
+#define msg(...) _d_error(EXIT_SUCCESS, errno, __VA_ARGS__)
+#define die(...) _d_error(EXIT_FAILURE, errno, __VA_ARGS__)
 
 
 /* forline(l, f) { ... } is an iteration construct which executes the
@@ -56,13 +60,13 @@ extern void d_error(int status, int errnum, const char *format, ...);
 
 
 #define forline(l, f)							\
-  for (D_FILE _f_ = d_open(f); _f_ != NULL; d_close(_f_), _f_ = NULL)	\
-    for (char *l = d_gets(_f_); l != NULL; l = d_gets(_f_))
+  for (_D_FILE _f_ = _d_open(f); _f_ != NULL; _d_close(_f_), _f_ = NULL)	\
+    for (char *l = _d_gets(_f_); l != NULL; l = _d_gets(_f_))
 
-typedef struct D_FILE_S *D_FILE;
-extern D_FILE d_open(const char *fname);
-extern void d_close(D_FILE f);
-extern char *d_gets(D_FILE f);
+typedef struct _D_FILE_S *_D_FILE;
+extern _D_FILE _d_open(const char *fname);
+extern void _d_close(_D_FILE f);
+extern char *_d_gets(_D_FILE f);
 
 
 /* fortok(t, s) { ... } is an iteration construct which executes the
@@ -108,96 +112,130 @@ static inline size_t split(char *str, int sep, char **argv, size_t argv_len) {
   return numtokens;
 }
 
+/* fast memory allocation */
+extern ptr_t dalloc(size_t size);
+extern str_t dstrdup (const str_t s);
+extern void dfreeall();
 
-/* hash tables */
+/* error checking memory allocation */
+extern void *_d_malloc(size_t size);
+extern void *_d_calloc(size_t nmemb, size_t size);
+extern void *_d_realloc(void *ptr, size_t size);
+
+/* define generic container */
+
+typedef struct darr_s {
+  void *data;
+  uint64_t bits;
+} *darr_t;
+
+/* Represent log2(capacity) in the first 6 bits and number of elements
+   (len) in the last 58 bits of a uint64_t in darr_t->bits.  This
+   means capacity is always a power of 2. */
+
+#define _D_LENBITS 58
+#define cap(a) (1ULL << ((a)->bits >> _D_LENBITS))
+#define len(a) ((a)->bits & ((1ULL << _D_LENBITS) - 1))
+#define _d_dblcap(a) ((a)->bits += (1ULL << _D_LENBITS))
+#define _d_inclen(a) ((a)->bits++)
+#define _d_setlen(a,l) ((a)->bits = ((((a)->bits >> _D_LENBITS) << _D_LENBITS) | (l)))
+
+/* Define initializer and destructor */
+
+static inline darr_t darr_new(size_t nmemb, size_t esize) {
+  if (nmemb >= (1ULL << _D_LENBITS))
+    die("darr_t cannot hold more than %lu elements.", (1ULL<<_D_LENBITS));
+  darr_t a = _d_malloc(sizeof(struct darr_s));
+  size_t b; for (b = 0; (1ULL << b) < nmemb; b++);		
+  a->bits = (b << _D_LENBITS);					
+  size_t c = (1ULL << b);					
+  a->data = _d_malloc(c * esize);
+  return a;							
+}
+
+static inline void darr_free(darr_t a) {
+  free(a->data); free(a);
+}
+
+/* for access we like lvalue type access, instead of set, get:
+   e.g. x = val(int,a,i) or val(int,a,i) = x 
+   in this case len(a) has to give last accessed element, not necessarily last set.
+   this risks the user to accidentally allocate a huge array, oh well.
+*/
+
+#define val(t,a,i) (((t*)(_d_boundcheck((a),(i),sizeof(t))->data))[i])
+
+static inline darr_t _d_boundcheck(darr_t a, size_t i, size_t esize) {
+  size_t l = len(a);
+  if (i < l) return a;
+  if (i >= (1ULL << _D_LENBITS))
+    die("darr_t cannot hold more than %lu elements.", (1ULL<<_D_LENBITS));
+  _d_setlen(a,i+1);
+  size_t c = cap(a);
+  if (i < c) return a;
+  do {
+    c <<= 1;
+    _d_dblcap(a);
+  } while (i >= c);
+  a->data = _d_realloc(a->data, c * esize);
+  return a;
+}
+
+/* hash tables: use the same darr_t container.  However needs new
+   initializer because the entries need to be emptied, which will
+   confuse people.  Access is through the get function which returns a
+   pointer to the entry with the matching key.  If matching key is not
+   found one is created and initialized with _einit(key) if
+   insert=true, or NULL is returned if insert=false. */
 
 #define D_HASH(_pre, _etype, _ktype, _kmatch, _khash, _keyof, _einit, _isnull, _mknull) \
   									\
-typedef struct _pre##tab_s {						\
-  _etype *data;								\
-  uint64_t bits;							\
-} *_pre##tab_t;								\
-									\
-static inline _pre##tab_t _pre##new(size_t n) {			\
-  _pre##tab_t h = d_malloc(sizeof(struct _pre##tab_s));			\
-  size_t b; for (b = 0; (1ULL << b) < n; b++);				\
-  h->bits = (b << D_HBIT);						\
-  size_t cap = (1ULL << b);						\
-  h->data = d_malloc(cap * sizeof(_etype));				\
-  for (size_t i = cap; i-- != 0; _mknull(h->data[i]));			\
-  return h;								\
-}									\
-									\
-static inline void _pre##free(_pre##tab_t h) {			\
- free(h->data); free(h);						\
-}									\
-									\
-static inline size_t _pre##len(_pre##tab_t h) {			\
- return d_hlen(h);							\
-}									\
- 									\
-static inline size_t _pre##idx(_pre##tab_t h, _ktype k) {		\
-  size_t idx, step;							\
-  size_t mask = d_hcap(h) - 1;						\
-  for (idx = (_khash(k) & mask), step = 0;				\
-       (!_isnull(h->data[idx]) &&					\
-	!_kmatch(k, _keyof(h->data[idx])));				\
-       step++, idx = ((idx+step) & mask));				\
-  return idx;								\
-}									\
-									\
-static inline _etype *_pre##get(_pre##tab_t h, _ktype k, bool insert) { \
-  size_t idx = 0;							\
-  size_t cap = d_hcap(h);						\
-  size_t len = d_hlen(h);						\
-									\
-  if (cap <= D_HMIN) {							\
-    for (idx = 0; idx < len; idx++)					\
-      if (_kmatch(k, _keyof(h->data[idx]))) break;			\
-    if (idx < len) return &(h->data[idx]);				\
-    									\
-  } else {								\
-    idx = _pre##idx(h, k);						\
-    if (!_isnull(h->data[idx])) return &(h->data[idx]);			\
+  static inline darr_t _pre##new(size_t n) {				\
+    darr_t h = darr_new(n, sizeof(_etype));				\
+    _etype *data = h->data;						\
+    for (size_t i = cap(h); i-- != 0; _mknull(data[i]));		\
+    return h;								\
   }									\
 									\
-  if (!insert) return NULL;						\
-									\
-  if (((cap <= D_HMIN) && (len >= (cap - 1))) ||			\
-      ((cap > D_HMIN)  && (len >= (cap >> 1) + (cap >> 2)))) {		\
-    d_hdbl(h);								\
-    size_t cap2 = d_hcap(h);						\
-    if (cap2 <= D_HMIN) {						\
-      h->data = d_realloc(h->data, cap2 * sizeof(_etype));		\
-      for (size_t i = len; i < cap2; _mknull(h->data[i++]));		\
-    } else {								\
-      _etype *xdata = h->data;						\
-      h->data = d_malloc(cap2 * sizeof(_etype));			\
-      for (size_t i = 0; i < cap2; _mknull(h->data[i++]));		\
-      for (size_t j = cap; j-- != 0; ) {				\
+  static inline size_t _d_##_pre##idx(darr_t h, _ktype k) {		\
+    size_t idx, step;							\
+    size_t mask = cap(h) - 1;						\
+    _etype *data = (_etype*) h->data;					\
+    for (idx = (_khash(k) & mask), step = 0;				\
+	 (!_isnull(data[idx]) &&					\
+	  !_kmatch(k, _keyof(data[idx])));				\
+	 step++, idx = ((idx+step) & mask));				\
+    return idx;								\
+  }									\
+  									\
+  static inline _etype *_pre##get(darr_t h, _ktype k, bool insert) {	\
+    size_t c = cap(h);							\
+    size_t l = len(h);							\
+    assert(l < c);							\
+    size_t idx = _d_##_pre##idx(h, k);					\
+    _etype *data = (_etype*) h->data;					\
+    if (!_isnull(data[idx])) return &(data[idx]);			\
+    if (!insert) return NULL;						\
+    									\
+    if (l >= (c >> 1) + (c >> 2)) {					\
+      _etype *xdata = data;						\
+      _d_dblcap(h);							\
+      size_t c2 = cap(h);						\
+      data = h->data = _d_malloc(c2 * sizeof(_etype));			\
+      for (size_t i = 0; i < c2; _mknull(data[i++]));			\
+      for (size_t j = 0; j < c; j++) {					\
 	if (_isnull(xdata[j])) continue;				\
-	size_t i = _pre##idx(h, _keyof(xdata[j]));			\
-	h->data[i] = xdata[j];						\
+	size_t i = _d_##_pre##idx(h, _keyof(xdata[j]));			\
+	data[i] = xdata[j];						\
       }									\
       free(xdata);							\
-      idx = _pre##idx(h, k);						\
+      idx = _d_##_pre##idx(h, k);					\
     }									\
-  }									\
 									\
-  h->data[idx] = _einit(k);						\
-  d_hinc(h);								\
-  return &(h->data[idx]);						\
-}
-
-#define D_HBIT 58		// don't touch this!
-#define D_HMIN 16		// anything larger slows down, smaller indifferent
-#define d_hcap(h) (1ULL << ((h)->bits >> D_HBIT))
-#define d_hlen(h) ((h)->bits & ((1ULL << D_HBIT) - 1))
-#define d_hdbl(h) ((h)->bits += (1ULL << D_HBIT))
-#define d_hinc(h) ((h)->bits++)
-extern void *d_malloc(size_t size);
-extern void *d_realloc(void *ptr, size_t size);
-extern size_t fnv1a(const char *k);
+    data[idx] = _einit(k);						\
+    _d_inclen(h);							\
+    return &(data[idx]);						\
+  }
 
 // Define some common hash types
 #define d_strmatch(a,b) (!strcmp((a),(b)))
@@ -208,26 +246,33 @@ extern size_t fnv1a(const char *k);
 #define d_isnull(a) ((a)==NULL)
 #define d_mknull(a) ((a)=NULL)
 #define d_ident(a) (a)
-typedef char *d_cptr;
+extern size_t fnv1a(const char *k);
 
 #define D_STRHASH(h, etype, einit) \
-  D_HASH(h, etype, d_cptr, d_strmatch, fnv1a, d_keyof, einit, d_keyisnull, d_keymknull)
+  D_HASH(h, etype, str_t, d_strmatch, fnv1a, d_keyof, einit, d_keyisnull, d_keymknull)
 
 #define D_STRSET(h) \
-  D_HASH(h, d_cptr, d_cptr, d_strmatch, fnv1a, d_ident, strdup, d_isnull, d_mknull)
+  D_HASH(h, str_t, str_t, d_strmatch, fnv1a, d_ident, strdup, d_isnull, d_mknull)
 
 #define forhash(etype, e, h, isnull) \
-  for (size_t _I_ = d_hcap(h), _i_ = 0; _i_ < _I_; _i_++) \
+  for (size_t _I_ = cap(h), _i_ = 0; _i_ < _I_; _i_++) \
     for (etype (*_p_) = (h)->data, e = _p_[_i_]; !isnull(e) && (_p_ != NULL); _p_ = NULL)
 
-#define forstrset(s, h) forhash(d_cptr, s, h, d_isnull)    
+#define forstrset(s, h) forhash(str_t, s, h, d_isnull)    
 
 #define forstrhash(etype, e, h) forhash(etype, e, h, d_keyisnull)
 
+
+/* symbol table: symbols are represented with uint32_t > 0.  str2sym
+   returns 0 for strings not found if create=false.  sym2str returns
+   NULL if sym is 0 or out of range. */
+
+typedef uint32_t sym_t;
+extern sym_t str2sym(const str_t str, bool create);
+extern str_t sym2str(sym_t sym);
+
 /* TODO:
    double hash?
-   symbol table?
-   dynamic array
    heap with linear heapify
  */
 

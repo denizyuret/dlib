@@ -6,13 +6,13 @@ D_STRSET(h)
 int main(int argc, char **argv) {
   char *fname = (argc == 1) ? NULL : argv[1];
   msg("Reading %s", fname == NULL ? "stdin" : fname);
-  htab_t h = hnew(0);
+  darr_t h = hnew(0);
   forline(buf, fname) {
     fortok(tok, buf) {
       hget(h, tok, 1);
     }
   }
-  msg("%lu", hlen(h));
+  msg("%lu", len(h));
 }
 
 #ifdef VERSION4
@@ -21,6 +21,7 @@ int main(int argc, char **argv) {
 1. Do we combine size and bits in one word
 Downsides: few more ops to get size and bits, few more ops to get mask and max, less clear code
 Upsides: saves one word for lots of small containers, code cost minimal, transparency cost mitigate with macros
+YES
 
 2. Do we use flexible array for storage - no, see #4.
 Upside: save one more word for lots of small containers
@@ -86,18 +87,23 @@ do the more general implementation and use pointers if you like.
 
 6. Do we use linear search for small hashes
 Need to test speed impact
+NONE
 
 7. Do we use key or elt for search?
 Using key cons: calling needs ktype, resize needs keyof
 pros: calling easier, match and isnull only check keys, 
+KEY
 
 8. Test the hash function on google words.
+OK
 
 9. Do we return index or pointer for get?
+PTR
 
 10. Do we have single array struct or multiple structs?
-Multiple.  Hashes need special initialization with our without init-size.  
+Multiple.  Hashes need special initialization with or without init-size.  
 Cannot let user allocate cap to an arbitrary amount.
+So, just define dnew.
 
  */
 

@@ -17,7 +17,7 @@ D_HASH(h, etype, ktype, kmatch, khash, keyof, einit, isnull, mknull)
 int main(int argc, char **argv) {
   char *fname = (argc == 1) ? NULL : argv[1];
   msg("Reading %s", fname == NULL ? "stdin" : fname);
-  htab_t h = hnew(0);
+  darr_t h = hnew(0);
   size_t total = 0;
   size_t coll = 0;
   forline(buf, fname) {
@@ -33,5 +33,5 @@ int main(int argc, char **argv) {
     }
   }
   msg("%zu %zu", coll, total);
-  hfree(h);
+  darr_free(h);
 }
