@@ -268,7 +268,7 @@ static inline darr_t _d_boundcheck(darr_t a, size_t i, size_t esize) {
     if (!_isnull(data[idx])) return &(data[idx]);			\
     if (!insert) return NULL;						\
     									\
-    if (l >= (c >> 1) + (c >> 2)) {					\
+    if (l >= (c >> 1) + (c >> 2) + (c >> 3)) {				\
       _etype *xdata = data;						\
       _d_dblcap(h);							\
       size_t c2 = cap(h);						\
