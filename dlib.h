@@ -11,7 +11,8 @@
 
 #define D_HAVE_POPEN 1
 #define D_HAVE_GETLINE 1
-#define D_HAVE_MALLINFO 1
+#define D_HAVE_PROC 1
+#define D_HAVE_MUSABLE 1
 
 /* If you have zlib and want support for reading gzip compressed files
    set the following to 1 and compile with -lz. */
@@ -112,6 +113,14 @@ static inline size_t split(char *str, int sep, char **argv, size_t argv_len) {
   return numtokens;
 }
 
+/* error checking memory allocation */
+extern size_t _d_memsize;
+extern void *_d_malloc(size_t size);
+extern void *_d_calloc(size_t nmemb, size_t size);
+extern void *_d_realloc(void *ptr, size_t size);
+extern void _d_free(void *ptr);
+
+
 /* fast memory allocation */
 extern char *_d_mfree;
 extern size_t _d_mleft;
@@ -132,6 +141,9 @@ static inline str_t dstrdup (const str_t s) {
   return (str_t) memcpy (new, s, len);
 }
 
+/* This has terrible performance, better comment to not encourage
+   people to use it. */
+/*
 static inline ptr_t drealloc(ptr_t ptr, size_t oldsize, size_t newsize) {
   if (ptr == NULL) {
     return dalloc(newsize);
@@ -149,11 +161,8 @@ static inline ptr_t drealloc(ptr_t ptr, size_t oldsize, size_t newsize) {
   memcpy(ptr2, ptr, oldsize);
   return ptr2;
 }
+*/
 
-/* error checking memory allocation */
-extern void *_d_malloc(size_t size);
-extern void *_d_calloc(size_t nmemb, size_t size);
-extern void *_d_realloc(void *ptr, size_t size);
 
 /* define generic container */
 
@@ -187,7 +196,7 @@ static inline darr_t darr_new(size_t nmemb, size_t esize) {
 }
 
 static inline void darr_free(darr_t a) {
-  free(a->data); free(a);
+  _d_free(a->data); _d_free(a);
 }
 
 /* for access we like lvalue type access, instead of set, get:
@@ -235,6 +244,10 @@ static inline darr_t _d_boundcheck(darr_t a, size_t i, size_t esize) {
     return h;								\
   }									\
 									\
+  static inline void _pre##free(darr_t h) {				\
+    darr_free(h);							\
+  }									\
+									\
   static inline size_t _d_##_pre##idx(darr_t h, _ktype k) {		\
     size_t idx, step;							\
     size_t mask = cap(h) - 1;						\
@@ -266,7 +279,7 @@ static inline darr_t _d_boundcheck(darr_t a, size_t i, size_t esize) {
 	size_t i = _d_##_pre##idx(h, _keyof(xdata[j]));			\
 	data[i] = xdata[j];						\
       }									\
-      free(xdata);							\
+      _d_free(xdata);							\
       idx = _d_##_pre##idx(h, k);					\
     }									\
 									\
@@ -306,6 +319,7 @@ extern size_t fnv1a(const char *k);
 typedef uint32_t sym_t;
 extern sym_t str2sym(const str_t str, bool create);
 extern str_t sym2str(sym_t sym);
+extern void symtable_free();
 
 /* TODO:
    double hash?

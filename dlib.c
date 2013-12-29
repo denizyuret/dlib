@@ -8,8 +8,8 @@
 #include <errno.h>		/* errno */
 #include <time.h>		/* clock_t, clock */
 #include <stdarg.h>		/* va_start etc. */
-#if D_HAVE_MALLINFO
-#include <malloc.h>		/* mallinfo */
+#if D_HAVE_MUSABLE
+#include <malloc.h>		/* malloc_usable_size */
 #endif
 #if D_HAVE_ZLIB
 #include <zlib.h>		/* gzopen, gzclose, gzgets */
@@ -23,7 +23,7 @@ static void _d_error_clock(double c) {
   fprintf(stderr, "%.2fs", c - 60 * ((long) (c / 60)));
 }
 
-#if D_HAVE_MALLINFO
+#if D_HAVE_PROC
 static void _d_error_mem(size_t m) {
   if (m < 1000) {
     fprintf(stderr, "%zu", m);
@@ -39,10 +39,17 @@ void _d_error(int status, int errnum, const char *format, ...) {
   putc('[', stderr);
   double c = (double) clock() / CLOCKS_PER_SEC;
   _d_error_clock(c);
-#if D_HAVE_MALLINFO
+#if D_HAVE_MUSABLE
   putc(' ', stderr);
-  struct mallinfo mi = mallinfo();
-  _d_error_mem(mi.hblkhd + mi.uordblks);
+  _d_error_mem(_d_memsize);
+#endif
+#if D_HAVE_PROC
+  putc(' ', stderr);
+  char *tok[23];
+  forline(l, "/proc/self/stat") {
+    split(l, ' ', tok, 23); break;
+  }
+  _d_error_mem(strtoul(tok[22], NULL, 10));
   putc('b', stderr);
 #endif
   fputs("] ", stderr);
@@ -60,10 +67,15 @@ void _d_error(int status, int errnum, const char *format, ...) {
 
 /*** error checking memory allocation */
 
+size_t _d_memsize = 0;
+
 void *_d_malloc(size_t size) {
   void *ptr = malloc(size);
   if (ptr == NULL) 
     die("Cannot allocate %zu bytes", size);
+#if D_HAVE_MUSABLE
+  _d_memsize += malloc_usable_size(ptr);
+#endif
   return ptr;
 }
 
@@ -71,16 +83,32 @@ void *_d_calloc(size_t nmemb, size_t size) {
   void *ptr = calloc(nmemb, size);
   if (ptr == NULL) 
     die("Cannot allocate %zu bytes", nmemb*size);
+#if D_HAVE_MUSABLE
+  _d_memsize += malloc_usable_size(ptr);
+#endif
   return ptr;
 }
 
 void *_d_realloc(void *ptr, size_t size) {
+#if D_HAVE_MUSABLE
+  _d_memsize -= malloc_usable_size(ptr);
+#endif
   void *ptr2 = realloc(ptr, size);
   if (ptr2 == NULL) 
     die("Cannot allocate %zu bytes", size);
+#if D_HAVE_MUSABLE
+  _d_memsize += malloc_usable_size(ptr2);
+#endif
   return ptr2;
 }
 
+void _d_free(void *ptr) {
+#if D_HAVE_MUSABLE
+  assert(_d_memsize >= malloc_usable_size(ptr));
+  _d_memsize -= malloc_usable_size(ptr);
+#endif
+  free(ptr);
+}
 
 /*** forline support code */
 
@@ -130,7 +158,7 @@ _D_FILE _d_open(const char *f) {
 }
 
 void _d_close(_D_FILE p) {
-  free(p->line);
+  free(p->line);		// may be reallocated by getline
   switch(p->type) {
   case _D_FOPEN: fclose(p->fptr); break;
 #if D_HAVE_POPEN
@@ -141,7 +169,7 @@ void _d_close(_D_FILE p) {
 #endif
   default: break;
   }
-  free(p);
+  _d_free(p);
 }
 
 char *_d_gets(_D_FILE p) {
@@ -154,7 +182,8 @@ char *_d_gets(_D_FILE p) {
 #endif
   if (p->line == NULL || p->size == 0) {
     p->size = 120;
-    p->line = _d_malloc(p->size);
+    p->line = malloc(p->size);	// can be realloced by getline
+    assert(p->line != NULL);
   }
   char *ptr = p->line;
   size_t len = p->size;
@@ -208,7 +237,7 @@ size_t _d_mleft = 0;
 void dfreeall() {
   while (_d_mlast != NULL) {
     ptr_t p = _d_mnext(_d_mlast);
-    free(_d_mlast);
+    _d_free(_d_mlast);
     _d_mlast = p;
   }
 }
@@ -272,6 +301,11 @@ str_t sym2str(sym_t sym) {
   } else {
     return (((str_t *)(_d_strtable->data))[sym - 1]);
   }
+}
+
+void symtable_free() {
+  _d_symfree(_d_symtable); _d_symtable = NULL;
+  darr_free(_d_strtable); _d_strtable = NULL;
 }
 
 void symdbg() {

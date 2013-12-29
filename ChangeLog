@@ -20,11 +20,21 @@
 	malloc_stats.total in use bytes: (uordblks+hblkhd=1788366864)
 
 	Seems mallinfo.arena or uordblks definitely was not the whole
-	story and hblkhd had to be added.  Mallinfo may be slightly more
-	portable than the /proc system so I am keeping that for now.
+	story and hblkhd had to be added.  More serious problem is
+	mallinfo has 32 bit ints and fails when more than 4G is allocated,
+	which makes it a no go.
 
-	Going back to using clock rather than time.  Here is what I wrote
-	before in procinfo.h:
+	1. malloc_usable_size could be used in _d_malloc etc. It is a GNU
+	extension.  We'd have to consistently use _d_malloc etc.  The size
+	returned may not exactly equal the size requested.
+
+	2. we can use the /proc/self/stat*.  They do not give very
+	accurate numbers (i.e. the total size used by the process rather
+	than what we explicitly allocated).  They will work on any linux
+	system.  No need to instrument malloc etc.
+
+	* dlib.c (_d_error): Going back to using clock rather than time.
+	Here is what I wrote before in procinfo.h:
 
 	  Issue: clock() starts giving negative numbers after a while.  I
 	  checked the header files, CLOCKS_PER_SEC is defined to be 1000000
