@@ -15,7 +15,7 @@
 #include <zlib.h>		/* gzopen, gzclose, gzgets */
 #endif
 
-/* msg and die support code */
+/*** msg and die support code */
 
 void _d_error(int status, int errnum, const char *format, ...) {
   fflush(stdout);
@@ -37,25 +37,7 @@ void _d_error(int status, int errnum, const char *format, ...) {
   if (status) exit(status);
 }
 
-/* forline support code */
-
-struct _D_FILE_S {
-  void *fptr;
-  enum { _D_STDIN, _D_POPEN, _D_FOPEN, _D_GZOPEN } type;
-  size_t size;
-  char *line;
-};
-
-#if D_HAVE_ZLIB
-static int _d_gzfile(const char *f) {
-  FILE *fp = fopen(f, "r");
-  if (fp == NULL) return 0;
-  int c1 = fgetc(fp);
-  int c2 = fgetc(fp);
-  fclose(fp);
-  return ((c1 == 0x1f) && (c2 == 0x8b));
-}
-#endif
+/*** error checking memory allocation */
 
 void *_d_malloc(size_t size) {
   void *ptr = malloc(size);
@@ -77,6 +59,27 @@ void *_d_realloc(void *ptr, size_t size) {
     die("Cannot allocate %zu bytes", size);
   return ptr2;
 }
+
+
+/*** forline support code */
+
+struct _D_FILE_S {
+  void *fptr;
+  enum { _D_STDIN, _D_POPEN, _D_FOPEN, _D_GZOPEN } type;
+  size_t size;
+  char *line;
+};
+
+#if D_HAVE_ZLIB
+static int _d_gzfile(const char *f) {
+  FILE *fp = fopen(f, "r");
+  if (fp == NULL) return 0;
+  int c1 = fgetc(fp);
+  int c2 = fgetc(fp);
+  fclose(fp);
+  return ((c1 == 0x1f) && (c2 == 0x8b));
+}
+#endif
 
 _D_FILE _d_open(const char *f) {
   _D_FILE p = _d_malloc(sizeof(struct _D_FILE_S));
@@ -171,22 +174,33 @@ size_t fnv1a(const char *k) {
   return hash;
 }
 
-/* fast memory allocation */
-/* only way to free is to free everything */
+/*** fast memory allocation */
 
 #define _D_MSIZE (1<<20)
 static char *_d_mlast = NULL;
-static char *_d_mfree = NULL;
-static size_t _d_mleft = 0;
+char *_d_mfree = NULL;
+size_t _d_mleft = 0;
 #define _d_mnext(m) (*((ptr_t*)(m)))
 
-ptr_t dalloc(size_t size) {
-  char *ptr;
-  if (size <= _d_mleft) {
-    ptr = _d_mfree;
-    _d_mfree += size;
-    _d_mleft -= size;
-  } else if (size <= (_D_MSIZE >> 1)) {
+/* only way to free is to free everything */
+
+void dfreeall() {
+  while (_d_mlast != NULL) {
+    ptr_t p = _d_mnext(_d_mlast);
+    free(_d_mlast);
+    _d_mlast = p;
+  }
+}
+
+ptr_t _dalloc_helper(size_t size) {
+  char *ptr = NULL;
+  if (size <= (_D_MSIZE >> 1)) {
+    // Suspicious optimization
+    // hoping realloc will not move memory if getting smaller.
+    if (_d_mlast != NULL) {
+      char *shrink = _d_realloc(_d_mlast, _d_mfree - _d_mlast);
+      if (shrink != _d_mlast) die("dalloc: suspicious optimization broke the code.");
+    }
     ptr_t old = _d_mlast;
     _d_mlast = _d_malloc(_D_MSIZE + sizeof(ptr_t));
     _d_mnext(_d_mlast) = old;
@@ -207,21 +221,7 @@ ptr_t dalloc(size_t size) {
   return ptr;
 }
 
-void dfreeall() {
-  while (_d_mlast != NULL) {
-    ptr_t p = _d_mnext(_d_mlast);
-    free(_d_mlast);
-    _d_mlast = p;
-  }
-}
-
-str_t dstrdup (const str_t s) {
-  size_t len = strlen (s) + 1;
-  str_t new = dalloc (len);
-  return (str_t) memcpy (new, s, len);
-}
-
-/* symbol table */
+/*** symbol table */
 
 static darr_t _d_strtable;
 static darr_t _d_symtable;
@@ -233,7 +233,7 @@ static darr_t _d_symtable;
 static sym_t _d_syminit(const char *s) {
   if (_d_strtable == NULL) _d_strtable = darr_new(0, sizeof(str_t));
   size_t l = len(_d_strtable);
-  val(str_t, _d_strtable, l) = strdup(s);
+  val(str_t, _d_strtable, l) = dstrdup(s);
   return l+1;
 }
 
