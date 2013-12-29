@@ -230,7 +230,7 @@ static darr_t _d_symtable;
 #define _d_iszero(u) ((u)==0)
 #define _d_mkzero(u) ((u)=0)
 
-static sym_t _d_syminit(const char *s) {
+static sym_t _d_syminit(const str_t s) {
   if (_d_strtable == NULL) _d_strtable = darr_new(0, sizeof(str_t));
   size_t l = len(_d_strtable);
   val(str_t, _d_strtable, l) = dstrdup(s);
