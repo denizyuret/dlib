@@ -6,7 +6,7 @@
 #include <stdlib.h>		/* NULL, EXIT_FAILURE, free */
 #include <string.h>		/* strlen */
 #include <errno.h>		/* errno */
-#include <time.h>		/* time_t, time */
+#include <time.h>		/* clock_t, clock */
 #include <stdarg.h>		/* va_start etc. */
 #if D_HAVE_MALLINFO
 #include <malloc.h>		/* mallinfo */
@@ -17,22 +17,43 @@
 
 /*** msg and die support code */
 
+static void _d_error_clock(double c) {
+  if (c > 3600) fprintf(stderr, "%ldh", (long) (c / 3600));
+  if (c > 60) fprintf(stderr, "%ldm", ((long) (c / 60)) % 60);
+  fprintf(stderr, "%.2fs", c - 60 * ((long) (c / 60)));
+}
+
+#if D_HAVE_MALLINFO
+static void _d_error_mem(size_t m) {
+  if (m < 1000) {
+    fprintf(stderr, "%zu", m);
+  } else { 
+    _d_error_mem(m / 1000);
+    fprintf(stderr, ",%03zu", m % 1000);
+  }    
+}
+#endif
+
 void _d_error(int status, int errnum, const char *format, ...) {
   fflush(stdout);
-  static time_t t0 = 0;
-  time_t t1 = time(NULL);
-  if (t0 == 0) t0 = t1;
-  fprintf(stderr, "[t=%d", (int)(t1-t0));
+  putc('[', stderr);
+  double c = (double) clock() / CLOCKS_PER_SEC;
+  _d_error_clock(c);
 #if D_HAVE_MALLINFO
+  putc(' ', stderr);
   struct mallinfo mi = mallinfo();
-  fprintf(stderr, " m=%d", mi.uordblks);
+  _d_error_mem(mi.hblkhd + mi.uordblks);
+  putc('b', stderr);
 #endif
   fputs("] ", stderr);
   va_list args;
   va_start(args, format);
   vfprintf(stderr, format, args);
   va_end(args);
-  if (errnum) fprintf(stderr, ": %s", strerror(errnum));
+  if (errnum) {
+    fprintf(stderr, ": %s", strerror(errnum));
+    errno = 0;
+  }
   putc('\n', stderr);
   if (status) exit(status);
 }
