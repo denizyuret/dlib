@@ -1,3 +1,15 @@
+2014-01-10  Deniz Yuret  <dyuret@ku.edu.tr>
+
+	* dlib.h: TODO: have dbg that prints out message if NDEBUG is
+	not defined.
+
+2014-01-05  Deniz Yuret  <dyuret@ku.edu.tr>
+
+	* dlib.c: TODO: zlib sucks.  Old version is slow.  New version is
+	suspect.  xz does not have a similar lib.  Best to have a suffix
+	based version that automatically converts recognized file
+	extensions into pipes with appropriate commands.
+
 2013-12-29  Deniz Yuret  <dyuret@ku.edu.tr>
 
 	* dlib.c (_d_error): trying to find the best way to report memory.
