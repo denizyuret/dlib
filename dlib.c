@@ -11,12 +11,10 @@
 #if D_HAVE_MUSABLE
 #include <malloc.h>		/* malloc_usable_size */
 #endif
-#if D_HAVE_ZLIB
-#include <zlib.h>		/* gzopen, gzclose, gzgets */
-#endif
 
 /*** msg and die support code */
 
+#ifndef NDEBUG
 static void _d_error_clock(double c) {
   if (c > 3600) fprintf(stderr, "%ldh", (long) (c / 3600));
   if (c > 60) fprintf(stderr, "%ldm", ((long) (c / 60)) % 60);
@@ -24,25 +22,27 @@ static void _d_error_clock(double c) {
 }
 
 #if D_HAVE_PROC
-static void _d_error_mem(size_t m) {
+static void _d_error_mem(int64_t m) {
   if (m < 1000) {
-    fprintf(stderr, "%zu", m);
+    fprintf(stderr, "%ld", m);
   } else { 
     _d_error_mem(m / 1000);
-    fprintf(stderr, ",%03zu", m % 1000);
+    fprintf(stderr, ",%03ld", m % 1000);
   }    
 }
-#endif
+#endif // D_HAVE_PROC
+#endif // NDEBUG
 
 void _d_error(int status, int errnum, const char *format, ...) {
   fflush(stdout);
+#ifndef NDEBUG
   putc('[', stderr);
   double c = (double) clock() / CLOCKS_PER_SEC;
   _d_error_clock(c);
 #if D_HAVE_MUSABLE
   putc(' ', stderr);
   _d_error_mem(_d_memsize);
-#endif
+#endif // D_HAVE_MUSABLE
 #if D_HAVE_PROC
   putc(' ', stderr);
   char *tok[23];
@@ -51,8 +51,9 @@ void _d_error(int status, int errnum, const char *format, ...) {
   }
   _d_error_mem(strtoul(tok[22], NULL, 10));
   putc('b', stderr);
-#endif
+#endif // D_HAVE_PROC
   fputs("] ", stderr);
+#endif // NDEBUG
   va_list args;
   va_start(args, format);
   vfprintf(stderr, format, args);
@@ -67,14 +68,16 @@ void _d_error(int status, int errnum, const char *format, ...) {
 
 /*** error checking memory allocation */
 
-size_t _d_memsize = 0;
+int64_t _d_memsize = 0;
 
 void *_d_malloc(size_t size) {
   void *ptr = malloc(size);
   if (ptr == NULL) 
     die("Cannot allocate %zu bytes", size);
+#ifndef NDEBUG
 #if D_HAVE_MUSABLE
   _d_memsize += malloc_usable_size(ptr);
+#endif
 #endif
   return ptr;
 }
@@ -83,29 +86,38 @@ void *_d_calloc(size_t nmemb, size_t size) {
   void *ptr = calloc(nmemb, size);
   if (ptr == NULL) 
     die("Cannot allocate %zu bytes", nmemb*size);
+#ifndef NDEBUG
 #if D_HAVE_MUSABLE
   _d_memsize += malloc_usable_size(ptr);
+#endif
 #endif
   return ptr;
 }
 
 void *_d_realloc(void *ptr, size_t size) {
+#ifndef NDEBUG
 #if D_HAVE_MUSABLE
   _d_memsize -= malloc_usable_size(ptr);
+#endif
 #endif
   void *ptr2 = realloc(ptr, size);
   if (ptr2 == NULL) 
     die("Cannot allocate %zu bytes", size);
+#ifndef NDEBUG
 #if D_HAVE_MUSABLE
   _d_memsize += malloc_usable_size(ptr2);
+#endif
 #endif
   return ptr2;
 }
 
 void _d_free(void *ptr) {
+#ifndef NDEBUG
 #if D_HAVE_MUSABLE
-  assert(_d_memsize >= malloc_usable_size(ptr));
+  // This may fail if multithreaded  
+  // assert(_d_memsize >= malloc_usable_size(ptr));
   _d_memsize -= malloc_usable_size(ptr);
+#endif
 #endif
   free(ptr);
 }
@@ -114,19 +126,26 @@ void _d_free(void *ptr) {
 
 struct _D_FILE_S {
   void *fptr;
-  enum { _D_STDIN, _D_POPEN, _D_FOPEN, _D_GZOPEN } type;
+  enum { _D_STDIN, _D_POPEN, _D_FOPEN } type;
   size_t size;
   char *line;
 };
 
-#if D_HAVE_ZLIB
-static int _d_gzfile(const char *f) {
-  FILE *fp = fopen(f, "r");
-  if (fp == NULL) return 0;
-  int c1 = fgetc(fp);
-  int c2 = fgetc(fp);
-  fclose(fp);
-  return ((c1 == 0x1f) && (c2 == 0x8b));
+#if D_HAVE_POPEN
+static char *_d_uncompress(const char *f) {
+  size_t n = strlen(f);
+  char *z = NULL;
+  if (n > 3 && !strcmp(&f[n-3], ".gz")) {
+    z = _d_malloc(n + 6);
+    sprintf(z, "zcat %s", f);
+  } else if (n > 3 && !strcmp(&f[n-3], ".xz")) {
+    z = _d_malloc(n + 7);
+    sprintf(z, "xzcat %s", f);
+  } else if (n > 4 && !strcmp(&f[n-4], ".bz2")) {
+    z = _d_malloc(n + 7);
+    sprintf(z, "bzcat %s", f);
+  }
+  return z;
 }
 #endif
 
@@ -134,6 +153,7 @@ _D_FILE _d_open(const char *f) {
   _D_FILE p = _d_malloc(sizeof(struct _D_FILE_S));
   p->size = 0;
   p->line = NULL;
+  char *z = NULL;
   if (f == NULL) {
     p->fptr = stdin;
     p->type = _D_STDIN;
@@ -141,11 +161,10 @@ _D_FILE _d_open(const char *f) {
   } else if (*f == '<') {
     p->fptr = popen(f+1, "r");
     p->type = _D_POPEN;
-#endif
-#if D_HAVE_ZLIB
-  } else if (_d_gzfile(f)) {
-    p->fptr = gzopen(f, "r");
-    p->type = _D_GZOPEN;
+  } else if ((z = _d_uncompress(f)) != NULL) {
+    p->fptr = popen(z, "r");
+    p->type = _D_POPEN;
+    _d_free(z);
 #endif
   } else {
     p->fptr = fopen(f, "r");
@@ -164,9 +183,6 @@ void _d_close(_D_FILE p) {
 #if D_HAVE_POPEN
   case _D_POPEN: pclose(p->fptr); break;
 #endif
-#if D_HAVE_ZLIB   
-  case _D_GZOPEN: gzclose(p->fptr); break;
-#endif
   default: break;
   }
   _d_free(p);
@@ -175,10 +191,8 @@ void _d_close(_D_FILE p) {
 char *_d_gets(_D_FILE p) {
   if (p == NULL) return NULL;
 #if D_HAVE_GETLINE
-  if (p->type != _D_GZOPEN) {
-    ssize_t ret = getline(&(p->line), &(p->size), p->fptr);
-    return ((ret == -1) ? NULL : p->line);
-  }
+  ssize_t rgetline = getline(&(p->line), &(p->size), p->fptr);
+  return ((rgetline == -1) ? NULL : p->line);
 #endif
   if (p->line == NULL || p->size == 0) {
     p->size = 120;
@@ -187,17 +201,12 @@ char *_d_gets(_D_FILE p) {
   }
   char *ptr = p->line;
   size_t len = p->size;
-  char *ret = NULL;
+  char *rgets = NULL;
   do {
     ptr[0] = 0;
     ptr[len-1] = 1; // This will become 0 if line too long
-#if D_HAVE_ZLIB
-    if (p->type == _D_GZOPEN)
-      ret = gzgets(p->fptr, ptr, len);
-    else
-#endif
-      ret = fgets(ptr, len, p->fptr);
-    if (ret == NULL) break;
+    rgets = fgets(ptr, len, p->fptr);
+    if (rgets == NULL) break;
     if (ptr[len-1] == 0) {  // We may need to keep reading
       if (ptr[len-2] == '\n') break; // Just finished a line
       size_t oldn = p->size;
@@ -207,7 +216,7 @@ char *_d_gets(_D_FILE p) {
       len = oldn + 1;
     }
   } while (ptr[len-1] == 0);
-  if ((ret == NULL) && (ptr == p->line)) {
+  if ((rgets == NULL) && (ptr == p->line)) {
     return NULL;
   } else {
     return p->line;
