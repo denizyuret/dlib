@@ -14,11 +14,6 @@
 #define D_HAVE_PROC 1
 #define D_HAVE_MUSABLE 1
 
-/* If you have zlib and want support for reading gzip compressed files
-   set the following to 1 and compile with -lz. */
-
-#define D_HAVE_ZLIB 1
-
 /* Standard C99 includes */
 
 #include <stdlib.h>		/* NULL, EXIT_SUCCESS, EXIT_FAILURE */
@@ -43,14 +38,18 @@ typedef void *ptr_t;
 extern void _d_error(int status, int errnum, const char *format, ...);
 #define msg(...) _d_error(EXIT_SUCCESS, errno, __VA_ARGS__)
 #define die(...) _d_error(EXIT_FAILURE, errno, __VA_ARGS__)
-
+#ifdef NDEBUG
+#define dbg(...)
+#else
+#define dbg(...) _d_error(EXIT_SUCCESS, errno, __VA_ARGS__)
+#endif
 
 /* forline(l, f) { ... } is an iteration construct which executes the
    statements in the body with the undeclared variable l set to each
    line in file f.  If f==NULL stdin is read, if f starts with '<' as
    in f=="< cmd args" the cmd is run with args and its stdout is read,
-   otherwise a regular file with path f is read.  If zlib is
-   available, gzip compressed files are automatically handled.
+   otherwise a regular file with path f is read.  If pipes are
+   available, gz, xz, bz2 compressed files are automatically handled.
    Example:
 
    forline (str, "file.txt") {
@@ -114,7 +113,7 @@ static inline size_t split(char *str, int sep, char **argv, size_t argv_len) {
 }
 
 /* error checking memory allocation */
-extern size_t _d_memsize;
+extern int64_t _d_memsize;
 extern void *_d_malloc(size_t size);
 extern void *_d_calloc(size_t nmemb, size_t size);
 extern void *_d_realloc(void *ptr, size_t size);
