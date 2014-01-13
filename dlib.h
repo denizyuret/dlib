@@ -30,6 +30,8 @@
 /* Define some convenience types */
 typedef char *str_t;
 typedef void *ptr_t;
+typedef uint32_t u32;
+typedef uint64_t u64;
 
 /* msg and die write runtime and memory info, a formatted string, and
    any system error message to stderr.  The only difference is die
