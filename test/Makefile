@@ -16,7 +16,8 @@ test_strset \
 test_wfreq \
 test_bigram \
 test_symtable \
-test_darr_t
+test_darr_t \
+test_mallinfo
 
 all: ${TEST}
 

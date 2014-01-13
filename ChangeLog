@@ -1,3 +1,78 @@
+2014-01-11  Deniz Yuret  <dyuret@ku.edu.tr>
+
+	* dlib.c: TODO: Having _d_memsize updated in _d_ malloc
+	routines make them non-thread-safe.  The routines work but the
+	variable should be ignored.  We could use pragmas to make the
+	operations atomic.  The same applies to all dlib routines that use
+	global variables, in particular dalloc routines.  We need to
+	rethink the design.
+
+2014-01-10  Deniz Yuret  <dyuret@ku.edu.tr>
+
+	* dlib.h: DONE: have dbg that prints out message if NDEBUG is
+	not defined.
+
+2014-01-05  Deniz Yuret  <dyuret@ku.edu.tr>
+
+	* dlib.c: DONE: zlib sucks.  Old version is slow.  New version is
+	suspect.  xz does not have a similar lib.  Best to have a suffix
+	based version that automatically converts recognized file
+	extensions into pipes with appropriate commands.
+
+2013-12-29  Deniz Yuret  <dyuret@ku.edu.tr>
+
+	* dlib.c (_d_error): trying to find the best way to report memory.
+	Here are before and after lm load numbers for fastsubs (page size
+	4096 bytes, lm load time 96 secs):
+
+	sbrk(0): 8M 456M  (x4 = 1825M 1793M)
+	/proc/stat.vss: 15M 1806M (bytes)
+	/proc/stat.rss: 206 437474 (pages)
+	/proc/stat.utime: 0 9366
+	/proc/stat.stime: 0 147
+	/proc/statm.size: 3891 441010 (pages=15M 1806M bytes)
+	/proc/statm.data: 520 437639 (pages=2M 1792M bytes data+stack)
+	/proc/status.1: VmPeak=VmSize=15564kB VmData=1224kB VmStk=856kB VmExe=32kB (text) VmLib=3172kB (shared libs)
+	/proc/status.2: VmPeak=2244M VmSize=1764M VmData=1749M VmStk=856kB VmExe=32kB VmLib=3172kB
+	mallinfo.arena: 135K 448M (system bytes)
+	mallinfo.uordblks: 1408 445M (in use bytes)
+	mallinfo.hblkhd: 1052K 1343M (arena+hblkhd=1791627264)
+	malloc_stats.total system bytes: (arena+hblkhd=1791627264)
+	malloc_stats.total in use bytes: (uordblks+hblkhd=1788366864)
+
+	Seems mallinfo.arena or uordblks definitely was not the whole
+	story and hblkhd had to be added.  More serious problem is
+	mallinfo has 32 bit ints and fails when more than 4G is allocated,
+	which makes it a no go.
+
+	1. malloc_usable_size could be used in _d_malloc etc. It is a GNU
+	extension.  We'd have to consistently use _d_malloc etc.  The size
+	returned may not exactly equal the size requested.
+
+	2. we can use the /proc/self/stat*.  They do not give very
+	accurate numbers (i.e. the total size used by the process rather
+	than what we explicitly allocated).  They will work on any linux
+	system.  No need to instrument malloc etc.
+
+	* dlib.c (_d_error): Going back to using clock rather than time.
+	Here is what I wrote before in procinfo.h:
+
+	  Issue: clock() starts giving negative numbers after a while.  I
+	  checked the header files, CLOCKS_PER_SEC is defined to be 1000000
+	  and the return value of clock, clock_t, is defined as signed long.
+	  This means after 2000 seconds things go negative.  Need to use some
+	  other function for longer programs.
+
+	  Switched to using times, which works with _SC_CLK_TCK defined as
+	  100 so the overflow should take longer.
+
+	  That also didn't work, finally decided to use the time function
+	  which has a resolution of seconds.
+
+	The wrap-around problem is not going to happen on a 64 bit
+	platform and most dlib routines assume 64 bits and I am probably
+	not going to try to make it 32 bit compatible.
+
 2013-12-26    <dyuret@ku.edu.tr>
 
 	* dlib.h: Hash tables implemented.  Still ugly and general for

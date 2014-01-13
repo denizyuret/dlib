@@ -11,12 +11,8 @@
 
 #define D_HAVE_POPEN 1
 #define D_HAVE_GETLINE 1
-#define D_HAVE_MALLINFO 1
-
-/* If you have zlib and want support for reading gzip compressed files
-   set the following to 1 and compile with -lz. */
-
-#define D_HAVE_ZLIB 1
+#define D_HAVE_PROC 1
+#define D_HAVE_MUSABLE 1
 
 /* Standard C99 includes */
 
@@ -44,14 +40,18 @@ typedef uint64_t u64;
 extern void _d_error(int status, int errnum, const char *format, ...);
 #define msg(...) _d_error(EXIT_SUCCESS, errno, __VA_ARGS__)
 #define die(...) _d_error(EXIT_FAILURE, errno, __VA_ARGS__)
-
+#ifdef NDEBUG
+#define dbg(...)
+#else
+#define dbg(...) _d_error(EXIT_SUCCESS, errno, __VA_ARGS__)
+#endif
 
 /* forline(l, f) { ... } is an iteration construct which executes the
    statements in the body with the undeclared variable l set to each
    line in file f.  If f==NULL stdin is read, if f starts with '<' as
    in f=="< cmd args" the cmd is run with args and its stdout is read,
-   otherwise a regular file with path f is read.  If zlib is
-   available, gzip compressed files are automatically handled.
+   otherwise a regular file with path f is read.  If pipes are
+   available, gz, xz, bz2 compressed files are automatically handled.
    Example:
 
    forline (str, "file.txt") {
@@ -114,15 +114,56 @@ static inline size_t split(char *str, int sep, char **argv, size_t argv_len) {
   return numtokens;
 }
 
-/* fast memory allocation */
-extern ptr_t dalloc(size_t size);
-extern str_t dstrdup (const str_t s);
-extern void dfreeall();
-
 /* error checking memory allocation */
+extern int64_t _d_memsize;
 extern void *_d_malloc(size_t size);
 extern void *_d_calloc(size_t nmemb, size_t size);
 extern void *_d_realloc(void *ptr, size_t size);
+extern void _d_free(void *ptr);
+
+
+/* fast memory allocation */
+extern char *_d_mfree;
+extern size_t _d_mleft;
+extern ptr_t _dalloc_helper(size_t size);
+extern void dfreeall();
+
+static inline ptr_t dalloc(size_t size) {
+  if (size > _d_mleft) return _dalloc_helper(size);
+  char *ptr = _d_mfree;
+  _d_mfree += size;
+  _d_mleft -= size;
+  return ptr;
+}
+
+static inline str_t dstrdup (const str_t s) {
+  size_t len = strlen (s) + 1;
+  str_t new = dalloc (len);
+  return (str_t) memcpy (new, s, len);
+}
+
+/* This has terrible performance, better comment to not encourage
+   people to use it. */
+/*
+static inline ptr_t drealloc(ptr_t ptr, size_t oldsize, size_t newsize) {
+  if (ptr == NULL) {
+    return dalloc(newsize);
+  } 
+  if (ptr == _d_mfree - oldsize) {     // last allocated
+    int64_t extra = newsize - oldsize; // could be negative
+    if (_d_mleft >= extra) {
+      _d_mfree += extra;
+      _d_mleft -= extra;
+      return ptr;
+    }
+  }
+  if (newsize <= oldsize) return ptr;
+  ptr_t ptr2 = dalloc(newsize);
+  memcpy(ptr2, ptr, oldsize);
+  return ptr2;
+}
+*/
+
 
 /* define generic container */
 
@@ -156,7 +197,7 @@ static inline darr_t darr_new(size_t nmemb, size_t esize) {
 }
 
 static inline void darr_free(darr_t a) {
-  free(a->data); free(a);
+  _d_free(a->data); _d_free(a);
 }
 
 /* for access we like lvalue type access, instead of set, get:
@@ -192,11 +233,20 @@ static inline darr_t _d_boundcheck(darr_t a, size_t i, size_t esize) {
 
 #define D_HASH(_pre, _etype, _ktype, _kmatch, _khash, _keyof, _einit, _isnull, _mknull) \
   									\
-  static inline darr_t _pre##new(size_t n) {				\
-    darr_t h = darr_new(n, sizeof(_etype));				\
+  static inline void _pre##clear(darr_t h) {				\
     _etype *data = h->data;						\
     for (size_t i = cap(h); i-- != 0; _mknull(data[i]));		\
+    _d_setlen(h,0);							\
+  }									\
+									\
+  static inline darr_t _pre##new(size_t n) {				\
+    darr_t h = darr_new(n, sizeof(_etype));				\
+    _pre##clear(h);							\
     return h;								\
+  }									\
+									\
+  static inline void _pre##free(darr_t h) {				\
+    darr_free(h);							\
   }									\
 									\
   static inline size_t _d_##_pre##idx(darr_t h, _ktype k) {		\
@@ -219,7 +269,7 @@ static inline darr_t _d_boundcheck(darr_t a, size_t i, size_t esize) {
     if (!_isnull(data[idx])) return &(data[idx]);			\
     if (!insert) return NULL;						\
     									\
-    if (l >= (c >> 1) + (c >> 2)) {					\
+    if (l >= (c >> 1) + (c >> 2) + (c >> 3)) {				\
       _etype *xdata = data;						\
       _d_dblcap(h);							\
       size_t c2 = cap(h);						\
@@ -230,7 +280,7 @@ static inline darr_t _d_boundcheck(darr_t a, size_t i, size_t esize) {
 	size_t i = _d_##_pre##idx(h, _keyof(xdata[j]));			\
 	data[i] = xdata[j];						\
       }									\
-      free(xdata);							\
+      _d_free(xdata);							\
       idx = _d_##_pre##idx(h, k);					\
     }									\
 									\
@@ -247,6 +297,8 @@ static inline darr_t _d_boundcheck(darr_t a, size_t i, size_t esize) {
 #define d_keymknull(a) ((a).key=NULL)
 #define d_isnull(a) ((a)==NULL)
 #define d_mknull(a) ((a)=NULL)
+#define d_iszero(a) ((a)==0)
+#define d_mkzero(a) ((a)=0)
 #define d_ident(a) (a)
 extern size_t fnv1a(const char *k);
 
@@ -254,15 +306,11 @@ extern size_t fnv1a(const char *k);
   D_HASH(h, etype, str_t, d_strmatch, fnv1a, d_keyof, einit, d_keyisnull, d_keymknull)
 
 #define D_STRSET(h) \
-  D_HASH(h, str_t, str_t, d_strmatch, fnv1a, d_ident, strdup, d_isnull, d_mknull)
+  D_HASH(h, str_t, str_t, d_strmatch, fnv1a, d_ident, dstrdup, d_isnull, d_mknull)
 
-#define forhash(etype, e, h, isnull) \
+#define forhash(eptr_t, e, h, isnull) \
   for (size_t _I_ = cap(h), _i_ = 0; _i_ < _I_; _i_++) \
-    for (etype (*_p_) = (h)->data, e = _p_[_i_]; !isnull(e) && (_p_ != NULL); _p_ = NULL)
-
-#define forstrset(s, h) forhash(str_t, s, h, d_isnull)    
-
-#define forstrhash(etype, e, h) forhash(etype, e, h, d_keyisnull)
+    for (eptr_t e = &(((eptr_t)((h)->data))[_i_]); ((e != NULL) && (!isnull(*e))); e = NULL)
 
 
 /* symbol table: symbols are represented with uint32_t > 0.  str2sym
@@ -272,6 +320,7 @@ extern size_t fnv1a(const char *k);
 typedef uint32_t sym_t;
 extern sym_t str2sym(const str_t str, bool create);
 extern str_t sym2str(sym_t sym);
+extern void symtable_free();
 
 /* TODO:
    double hash?
