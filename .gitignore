@@ -1,6 +1,7 @@
 # Temporary files
 unused/
 download/
+doc/
 *~
 
 # -save-temps
