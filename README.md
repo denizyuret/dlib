@@ -88,12 +88,28 @@ English clause can be expressed in Perl as:
 So I decided C needs better iteration constructs.  The first one,
 `forline(l, f)` is an iteration construct which executes the
 statements in its body with the undeclared variable `l` set to each
-line in file `f`.  If `f==NULL` stdin is read, if `f` starts with '<'
-as in `f=="< cmd args"` the cmd is run with args and its stdout is
+line in file `f`.  If `f==NULL` stdin is read, if `f` starts with `<`
+as in `f=="< cmd args"` the `cmd` is run with `args` and its stdout is
 read, otherwise a regular file with path `f` is read.  If pipes are
 available, gz, xz, bz2 compressed files are automatically handled.
-The following example prints the length of each line in "file.txt":
+The following example prints the length of each line in `"file.txt"`:
 
 	forline (str, "file.txt") {
 	  printf("%d\n", strlen(str));
+	}
+The second one, `fortok(t, s)` is an iteration construct which
+executes the statements in its body with the undeclared variable t set
+to each whitespace separated token in string s.  It modifies and
+tokenizes s the same way strtok does, but unlike strtok it is reentry
+safe (i.e. multiple nested fortok loops are ok).  fortok3 takes an
+additional argument d to specify delimiter characters.  Example:
+
+	char *str = strdup("  To be    or not");
+	fortok (tok, str) {
+	  printf("%s:", tok); // prints To:be:or:not:
+	}
+
+	char *pwd = strdup("root:x:0:0:root:/root:/bin/bash");
+	fortok3 (tok, pwd, ":") {
+	  printf("%s ", tok); // prints "root x 0 0 root /root /bin/bash"
 	}
