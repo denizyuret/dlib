@@ -23,7 +23,7 @@ syntax.  This is my feeable, incomplete, and evolving attempt to
 import some of these ideas into C.
 
 
-CONTENTS
+Contents
 --------
 * [Compilation](#compilation)
 * [Error reporting](#error-reporting)
@@ -69,18 +69,30 @@ allocation routines, and "6,365b" is the virtual memory size reported
 by /proc/self/stat.  All of this can be turned off by defining NDEBUG.
 
 dbg is similar to msg, except it does nothing if NDEBUG is defined.
+
 die is similar to msg, except it exits the program after reporting.
 
 File I/O
 --------
 
-forline(l, f) { ... } is an iteration construct which executes the
-statements in the body with the undeclared variable l set to each line
-in file f.  If f==NULL stdin is read, if f starts with '<' as in f=="<
-cmd args" the cmd is run with args and its stdout is read, otherwise a
-regular file with path f is read.  If pipes are available, gz, xz, bz2
-compressed files are automatically handled.  The following example
-prints the length of each line in "file.txt":
+A problem I used as a running example during the design process is to
+"count the number of times each word appears in a file".  That 11 word
+English clause can be expressed in Perl as:
+
+	while(<>) {
+	  for (split) {
+	    $cnt{$_}++;
+	  }
+	}
+
+So I decided C needs better iteration constructs.  The first one,
+`forline(l, f)` is an iteration construct which executes the
+statements in its body with the undeclared variable `l` set to each
+line in file `f`.  If `f==NULL` stdin is read, if `f` starts with '<'
+as in `f=="< cmd args"` the cmd is run with args and its stdout is
+read, otherwise a regular file with path `f` is read.  If pipes are
+available, gz, xz, bz2 compressed files are automatically handled.
+The following example prints the length of each line in "file.txt":
 
 	forline (str, "file.txt") {
 	  printf("%d\n", strlen(str));
