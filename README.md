@@ -25,13 +25,13 @@ import some of these ideas into C.
 
 CONTENTS
 --------
-1. Compilation
-2. Error reporting
-3. File I/O
+* [Compilation](#compilation)
+* [Error reporting](#error-reporting)
+* [File I/O](#file-io)
 
 
-1. Compilation
---------------
+Compilation
+-----------
 
 To compile your C code with dlib, #include "dlib.h" at the beginning
 of your files and add dlib.c to the files to be compiled.  My typical
@@ -50,8 +50,9 @@ features:
 	_NO_PROC	Do not use the proc filesystem for memory reporting.
 	_NO_MUSABLE	Do not use GNU malloc_usable_size for memory reporting.
 	NDEBUG		Turn off debug output and assert checks.
-2. Error reporting
-----------------------
+
+Error reporting
+---------------
 
 msg writes runtime and memory info, a formatted string, and any system
 error message to stderr.  For example:
@@ -70,8 +71,8 @@ by /proc/self/stat.  All of this can be turned off by defining NDEBUG.
 dbg is similar to msg, except it does nothing if NDEBUG is defined.
 die is similar to msg, except it exits the program after reporting.
 
-3. File I/O
----------------
+File I/O
+--------
 
 forline(l, f) { ... } is an iteration construct which executes the
 statements in the body with the undeclared variable l set to each line
