@@ -1,6 +1,5 @@
-<link rel='stylesheet' href='swiss.css'/>
 dlib: Deniz's C Library
-=======================
+===========================
 (c) 2013-2014, Deniz Yuret <denizyuret@gmail.com>
 
 The main design goal of dlib is to make C programming as practical and
