@@ -23,7 +23,7 @@ syntax.  This is my feeable, incomplete, and evolving attempt to
 import some of these ideas into C.
 
 
-## CONTENTS
+### CONTENTS
 1. Compilation
 2. Error reporting
 3. File I/O
