@@ -35,7 +35,9 @@ CONTENTS
 
 To compile your C code with dlib, #include "dlib.h" at the beginning
 of your files and add dlib.c to the files to be compiled.  My typical
-gcc options are: -O3 -D_GNU_SOURCE -std=c99 -pedantic -Wall.
+gcc options are: 
+
+	-O3 -D_GNU_SOURCE -std=c99 -pedantic -Wall.
 
 I tried to stick with the C99 standard but used some extensions that
 can be turned off.  Use the -D_GNU_SOURCE compiler flag if you want to
@@ -48,19 +50,17 @@ features:
 	_NO_PROC	Do not use the proc filesystem for memory reporting.
 	_NO_MUSABLE	Do not use GNU malloc_usable_size for memory reporting.
 	NDEBUG		Turn off debug output and assert checks.
-
-
 2. Error reporting
-------------------
+----------------------
 
 msg writes runtime and memory info, a formatted string, and any system
 error message to stderr.  For example:
 
-   msg("Cannot open %s", fname);
+	msg("Cannot open %s", fname);
 
 may print:
 
-[1.23s 4,012 6,365b] Cannot open foo: No such file or directory
+	[1.23s 4,012 6,365b] Cannot open foo: No such file or directory
 
 Inside the brackets "1.23s" indicates the output of clock() converted
 to seconds, "4,012" is the number of bytes allocated using dlib memory
@@ -70,17 +70,17 @@ by /proc/self/stat.  All of this can be turned off by defining NDEBUG.
 dbg is similar to msg, except it does nothing if NDEBUG is defined.
 die is similar to msg, except it exits the program after reporting.
 
-
 3. File I/O
------------
+---------------
 
 forline(l, f) { ... } is an iteration construct which executes the
 statements in the body with the undeclared variable l set to each line
 in file f.  If f==NULL stdin is read, if f starts with '<' as in f=="<
 cmd args" the cmd is run with args and its stdout is read, otherwise a
 regular file with path f is read.  If pipes are available, gz, xz, bz2
-compressed files are automatically handled.  Example:
+compressed files are automatically handled.  The following example
+prints the length of each line in "file.txt":
 
 	forline (str, "file.txt") {
-	  printf("%d\n", strlen(str));  // prints the length of each line in "file.txt"
+	  printf("%d\n", strlen(str));
 	}
