@@ -23,7 +23,8 @@ syntax.  This is my feeable, incomplete, and evolving attempt to
 import some of these ideas into C.
 
 
-### CONTENTS
+CONTENTS
+--------
 1. Compilation
 2. Error reporting
 3. File I/O
@@ -42,14 +43,14 @@ compile with these features without warnings.  Define the following
 flags with -D compiler options if you don't have, or don't want these
 features:
 
-_NO_POPEN	Do not use pipes in File I/O.
-_NO_GETLINE	Do not use GNU getline.
-_NO_PROC	Do not use the proc filesystem for memory reporting.
-_NO_MUSABLE	Do not use GNU malloc_usable_size for memory reporting.
-NDEBUG		Turn off debug output and assert checks.
+	_NO_POPEN	Do not use pipes in File I/O.
+	_NO_GETLINE	Do not use GNU getline.
+	_NO_PROC	Do not use the proc filesystem for memory reporting.
+	_NO_MUSABLE	Do not use GNU malloc_usable_size for memory reporting.
+	NDEBUG		Turn off debug output and assert checks.
 
 
-2. ERROR REPORTING
+2. Error reporting
 ------------------
 
 msg writes runtime and memory info, a formatted string, and any system
@@ -73,17 +74,13 @@ die is similar to msg, except it exits the program after reporting.
 3. File I/O
 -----------
 
+forline(l, f) { ... } is an iteration construct which executes the
+statements in the body with the undeclared variable l set to each line
+in file f.  If f==NULL stdin is read, if f starts with '<' as in f=="<
+cmd args" the cmd is run with args and its stdout is read, otherwise a
+regular file with path f is read.  If pipes are available, gz, xz, bz2
+compressed files are automatically handled.  Example:
 
-
- forline(l, f) { ... } is an iteration construct which executes the
-   statements in the body with the undeclared variable l set to each
-   line in file f.  If f==NULL stdin is read, if f starts with '<' as
-   in f=="< cmd args" the cmd is run with args and its stdout is read,
-   otherwise a regular file with path f is read.  If pipes are
-   available, gz, xz, bz2 compressed files are automatically handled.
-   Example:
-
-   forline (str, "file.txt") {
-     printf("%d\n", strlen(str));  // prints the length of each line in "file.txt"
-   }
-
+	forline (str, "file.txt") {
+	  printf("%d\n", strlen(str));  // prints the length of each line in "file.txt"
+	}
