@@ -86,23 +86,26 @@ English clause can be expressed in Perl as:
 	}
 
 So I decided C needs better iteration constructs.  The first one,
-`forline(l, f)` is an iteration construct which executes the
+`forline(l, f)`, is an iteration construct which executes the
 statements in its body with the undeclared variable `l` set to each
 line in file `f`.  If `f==NULL` stdin is read, if `f` starts with `<`
 as in `f=="< cmd args"` the `cmd` is run with `args` and its stdout is
 read, otherwise a regular file with path `f` is read.  If pipes are
-available, gz, xz, bz2 compressed files are automatically handled.
-The following example prints the length of each line in `"file.txt"`:
+available, gz, xz, and bz2 compressed files are automatically handled.
+All the file/pipe opening and closing, allocating and freeing of
+string buffers etc. are taken care of behind the scenes.  The
+following example prints the length of each line in `"file.txt"`:
 
 	forline (str, "file.txt") {
 	  printf("%d\n", strlen(str));
 	}
-The second one, `fortok(t, s)` is an iteration construct which
-executes the statements in its body with the undeclared variable t set
-to each whitespace separated token in string s.  It modifies and
-tokenizes s the same way strtok does, but unlike strtok it is reentry
-safe (i.e. multiple nested fortok loops are ok).  fortok3 takes an
-additional argument d to specify delimiter characters.  Example:
+The second one, `fortok(t, s)`, is an iteration construct which
+executes the statements in its body with the undeclared variable `t`
+set to each whitespace separated token in string `s`.  It modifies and
+tokenizes `s` the same way `strtok` does, but unlike `strtok` it is
+reentry safe (i.e. multiple nested `fortok` loops are ok).
+`fortok3(t, s, d)` takes an additional argument `d` to specify
+delimiter characters.  Example:
 
 	char *str = strdup("  To be    or not");
 	fortok (tok, str) {
@@ -113,3 +116,9 @@ additional argument d to specify delimiter characters.  Example:
 	fortok3 (tok, pwd, ":") {
 	  printf("%s ", tok); // prints "root x 0 0 root /root /bin/bash"
 	}
+`split(char *str, int sep, char **argv, size_t argv_len)` splits
+the `str` into tokens delimited by the character `sep` and sets the
+pointers in `argv` to successive tokens.  `argv` should have enough
+space to hold `argv_len` pointers.  Stops when `argv_len` tokens
+reached or `str` runs out.  Modifies `str` by replacing occurrences of
+`sep` with `'\0'`.  Returns the number of tokens placed in `argv`. 
