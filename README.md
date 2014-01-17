@@ -1,6 +1,6 @@
 dlib: Deniz's C Library
 ===========================
-(c) 2013-2014, Deniz Yuret <denizyuret@gmail.com>
+(c) 2013-2014, Deniz Yuret, <denizyuret@gmail.com>
 
 The main design goal of dlib is to make C programming as practical and
 concise as Perl, and yet to retain its fine grained control over
@@ -23,8 +23,7 @@ syntax.  This is my feeable, incomplete, and evolving attempt to
 import some of these ideas into C.
 
 
-CONTENTS
---------
+## CONTENTS
 1. Compilation
 2. Error reporting
 3. File I/O
