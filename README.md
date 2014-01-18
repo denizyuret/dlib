@@ -2,6 +2,7 @@ dlib: Deniz's C Library
 ===========================
 (c) 2004-2014, Deniz Yuret (denizyuret@gmail.com)
 
+**Work in progress, do not trust this documentation yet!**
 
 Contents
 --------
@@ -53,7 +54,7 @@ as concise:
 
 	forline (str, NULL) {
 	  fortok (tok, str) {
-	    hval(hash, tok)++;
+	    hval(hash, tok)->cnt++;
 	  }
 	}
 
@@ -129,12 +130,12 @@ Tokenization
 
 `fortok(t, s)` is an iteration construct which executes the statements
 in its body with the undeclared string variable `t` set to each
-whitespace separated token in string `s`.  It modifies and tokenizes
-`s` the same way `strtok` does, but unlike `strtok` it is reentry safe
-(i.e. multiple nested `fortok` loops are ok).  `fortok3(t, s, d)`
-takes an additional character array `d` to specify delimiter
-characters.  Any sequence of characters from `d` will act as a single
-delimiter and delimiters in the beginning of the string are ignored.
+whitespace separated token in string `s`.  Empty tokens are skipped.
+It modifies and tokenizes `s` the same way `strtok` does, but unlike
+`strtok` it is reentry safe (i.e. multiple nested `fortok` loops are
+ok).  `fortok3(t, s, d)` takes an additional character array `d` to
+specify delimiter characters any one of which will act as a delimiter.
+`fortok(t, s)` is equivalent to `fortok3(t, s, "\f\n\r\t\v")`.
 Examples:
 
 	char *str = strdup("  To be    or not");
@@ -143,27 +144,27 @@ Examples:
 	  printf("[%s]", tok); // prints "[To][be][or][not]"
 	}
 
-	char *pwd = strdup(":root::/root:/bin/bash");
+	char *pwd = strdup(":root::/root:/bin/bash:");
 	fortok3 (tok, pwd, ":/") {
 	  printf("[%s]", tok); // prints "[root][root][bin][bash]"
 	}
 
-`split(char *str, const char *delim, char **argv, size_t argv_len)` 
+`split(char *str, const char *delim, char **argv, size_t argv_len)`
 returns the tokens of a string in an array.  This is useful because
 one often needs to refer to the n'th token in a string rather than
 iterating over them.  `split` splits the `str` into tokens delimited
-by the characters in `delim` and sets the pointers in the `argv` array
-to successive tokens (including empty tokens).  `argv` should have
-enough space to hold `argv_len` pointers.  Split stops when `argv_len`
-tokens are reached or `str` runs out.  It modifies `str` by replacing
-delimiter characters with `'\0'`.  Returns the number of tokens placed
-in `argv`.  Example:
+by single characters from `delim` (including empty tokens) and sets
+the pointers in the `argv` array to successive tokens.  `argv` should
+have enough space to hold `argv_len` pointers.  Split stops when
+`argv_len` tokens are reached or `str` runs out.  It modifies `str` by
+replacing delimiter characters with `'\0'`.  Returns the number of
+tokens placed in `argv`.  Example:
 
-	char *pwd = strdup(":root::/root:/bin/bash");
+	char *pwd = strdup(":root::/root:/bin/bash:");
 	char **toks = malloc(10 * sizeof(char *));
 	int n = split(pwd, ":/", toks, 10);
 	for (int i = 0; i < n; i++) {
-	  printf("[%s]", toks[i]); // prints "[][root][][][root][][bin][bash]"
+	  printf("[%s]", toks[i]); // prints "[][root][][][root][][bin][bash][]"
 	}
 
 Note the difference in delimiter handling between `split` and
@@ -184,15 +185,15 @@ Dynamic arrays
 type in dlib.
 
 * `darr_t darr(size_t n, type t)` returns a new array that has an
-  initial capacity of at least `n` and element type `t`.  The elements
-  are not initialized.
+  initial capacity of at least `n` and element type `t`.  `n==0` is
+  ok.  The elements are not initialized.
+* `void darr_free(darr_t a)` frees the space allocated for `a`.
 * `size_t len(darr_t a)` gives the number of elements in `a`.  A new
   array has `len(a) == 0`.
 * `size_t cap(darr_t a)` gives the current capacity of `a`.  It will
   grow as needed, up to a maximum of `(1<<58)` elements.
-* `void darr_free(darr_t a)` frees the space allocated for `a`.
 
-A regular array reference, such as `a[i]`, can be used as an
+A regular C array reference, such as `a[i]`, can be used as an
 l-value `(a[i] = 10)`, an r-value `(x = a[i])`, or both `(a[i]++)`.  I
 think this type of access makes the code more readable and I wanted
 the same flexibility with `darr_t`.  So instead of the usual `set`,
@@ -202,8 +203,9 @@ size_t i, type t)` which gives a reference to the `i`'th element of
 following are valid expressions and do what they look like they are
 supposed to:
 
-	int x = val(a, i, int);	  // get an element
+	darr_t a = darr(0, int);  // initialize array
 	val(a, i, int) = 10;	  // set an element
+	int x = val(a, i, int);	  // get an element
 	val(a, i, int)++;         // increment an element
 	int *p = &val(a, i, int); // get a pointer to an element
 	val(a, len(a), int) = 5;  // add a new element, increments len(a)
@@ -215,5 +217,5 @@ largest index accessed (read or write).  Some may think this gives too
 much power to the user to shoot themselves in the foot.  A read access
 to a never initialized element will return a random value.  An
 accidental read or write to a very large index may blow up the memory.
-Oh well.
+Oh well, don't do it.
 
