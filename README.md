@@ -10,6 +10,7 @@ Contents
 * [Error reporting](#error-reporting)
 * [File input](#file-input)
 * [Tokenization](#tokenization)
+* [Dynamic arrays](#dynamic-arrays)
 
 
 Introduction
@@ -70,7 +71,7 @@ I tried to stick with the C99 standard but used some extensions that
 can be turned off.  Use the `-D_GNU_SOURCE` compiler flag if you want
 to compile with these extensions without warnings.  Define the
 following flags with `-D` compiler options if you don't have, or don't
-want these features:
+want these extensions:
 
 	_NO_POPEN	Do not use pipes in File I/O.
 	_NO_GETLINE	Do not use GNU getline.
@@ -126,49 +127,93 @@ There are some special `f` arguments:
 Tokenization
 ----------------
 
-`fortok(t, s)`, is an iteration construct which executes the
-statements in its body with the undeclared string variable `t` set to
-each whitespace separated token in string `s`.  It modifies and
-tokenizes `s` the same way `strtok` does, but unlike `strtok` it is
-reentry safe (i.e. multiple nested `fortok` loops are ok).
-`fortok3(t, s, d)` takes an additional argument `d` to specify
-delimiter characters.  Examples:
+`fortok(t, s)` is an iteration construct which executes the statements
+in its body with the undeclared string variable `t` set to each
+whitespace separated token in string `s`.  It modifies and tokenizes
+`s` the same way `strtok` does, but unlike `strtok` it is reentry safe
+(i.e. multiple nested `fortok` loops are ok).  `fortok3(t, s, d)`
+takes an additional character array `d` to specify delimiter
+characters.  Any sequence of characters from `d` will act as a single
+delimiter and delimiters in the beginning of the string are ignored.
+Examples:
 
 	char *str = strdup("  To be    or not");
 	// need strdup because fortok won't work with constant strings
 	fortok (tok, str) {
-	  printf("%s:", tok); // prints To:be:or:not:
+	  printf("[%s]", tok); // prints "[To][be][or][not]"
 	}
 
-	char *pwd = strdup("root:::::/root:/bin/bash");
-	fortok3 (tok, pwd, ":") {
-	  printf("%s ", tok); // prints "root /root /bin/bash"
+	char *pwd = strdup(":root::/root:/bin/bash");
+	fortok3 (tok, pwd, ":/") {
+	  printf("[%s]", tok); // prints "[root][root][bin][bash]"
 	}
 
-`split` returns the tokens of a string in an array:
-
-	split(char *str, const char *delim, char **argv, size_t argv_len) 
-
-This is useful because one may need to refer to the n'th token in a
-string rather than iterating over them.  `split` splits the `str` into
-tokens delimited by the characters in `delim` and sets the pointers in
-the `argv` array to successive tokens.  `argv` should have enough
-space to hold `argv_len` pointers.  Split stops when `argv_len` tokens
-are reached or `str` runs out.  It modifies `str` by replacing
+`split(char *str, const char *delim, char **argv, size_t argv_len)` 
+returns the tokens of a string in an array.  This is useful because
+one often needs to refer to the n'th token in a string rather than
+iterating over them.  `split` splits the `str` into tokens delimited
+by the characters in `delim` and sets the pointers in the `argv` array
+to successive tokens (including empty tokens).  `argv` should have
+enough space to hold `argv_len` pointers.  Split stops when `argv_len`
+tokens are reached or `str` runs out.  It modifies `str` by replacing
 delimiter characters with `'\0'`.  Returns the number of tokens placed
 in `argv`.  Example:
 
-	char *pwd = strdup("root:::::/root:/bin/bash");
-	char **tok = malloc(10 * sizeof(char *));
-	int n = split(pwd, ":", tok, 10);
+	char *pwd = strdup(":root::/root:/bin/bash");
+	char **toks = malloc(10 * sizeof(char *));
+	int n = split(pwd, ":/", toks, 10);
 	for (int i = 0; i < n; i++) {
-	  printf("[%s]", tok[i]); // prints "[root][][][][][/root][/bin/bash]"
+	  printf("[%s]", toks[i]); // prints "[][root][][][root][][bin][bash]"
 	}
 
-Implementation note: Perl split, strtok, strsep each make a different
-design decision on how to handle the delimiters.  fortok and fortok3
-follow strtok and see multiple delimiter characters in a row as a
-single delimiter, whereas split, following strsep, will perceive
-multiple empty fields.  fortok is intended for free text, split for
-structured data. 
+Note the difference in delimiter handling between `split` and
+`fortok`.  `fortok` and `fortok3` follow `strtok` and see multiple
+delimiter characters in a row as a single delimiter, whereas `split`,
+following `strsep`, will perceive empty fields.  `fortok` is intended
+for free text, `split` for structured data.
+
+**NOTES:** Neither `split` nor `fortok` can handle a multi-character
+delimiter like `"::"`.  Not sure if using different delimiter handling
+strategies in the two will be confusing for the user.  Probably need
+something like `chop` or `trim` eventually.
+
+Dynamic arrays
+------------------
+
+`darr_t` (pronounced "dar-ty") is a general purpose dynamic array
+type in dlib.
+
+* `darr_t darr(size_t n, type t)` returns a new array that has an
+  initial capacity of at least `n` and element type `t`.  The elements
+  are not initialized.
+* `size_t len(darr_t a)` gives the number of elements in `a`.  A new
+  array has `len(a) == 0`.
+* `size_t cap(darr_t a)` gives the current capacity of `a`.  It will
+  grow as needed, up to a maximum of `(1<<58)` elements.
+* `void darr_free(darr_t a)` frees the space allocated for `a`.
+
+A regular array reference, such as `a[i]`, can be used as an
+l-value `(a[i] = 10)`, an r-value `(x = a[i])`, or both `(a[i]++)`.  I
+think this type of access makes the code more readable and I wanted
+the same flexibility with `darr_t`.  So instead of the usual `set`,
+`get`, `add` etc. functions we have a single macro `val(darr_t a,
+size_t i, type t)` which gives a reference to the `i`'th element of
+`a` that can be used as an l-value or an r-value.  All of the
+following are valid expressions and do what they look like they are
+supposed to:
+
+	int x = val(a, i, int);	  // get an element
+	val(a, i, int) = 10;	  // set an element
+	val(a, i, int)++;         // increment an element
+	int *p = &val(a, i, int); // get a pointer to an element
+	val(a, len(a), int) = 5;  // add a new element, increments len(a)
+
+The user can request or set any index of a `darr_t` from `0` to
+`(1<<58-1)`.  The `darr_t` will never complain and resize itself to
+permit the access (if memory allows).  `len(a)` will be one plus the
+largest index accessed (read or write).  Some may think this gives too
+much power to the user to shoot themselves in the foot.  A read access
+to a never initialized element will return a random value.  An
+accidental read or write to a very large index may blow up the memory.
+Oh well.
 
