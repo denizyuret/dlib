@@ -8,7 +8,7 @@
 #include <errno.h>		/* errno */
 #include <time.h>		/* clock_t, clock */
 #include <stdarg.h>		/* va_start etc. */
-#if D_HAVE_MUSABLE
+#ifndef _NO_MUSABLE
 #include <malloc.h>		/* malloc_usable_size */
 #endif
 
@@ -21,7 +21,7 @@ static void _d_error_clock(double c) {
   fprintf(stderr, "%.2fs", c - 60 * ((long) (c / 60)));
 }
 
-#if D_HAVE_PROC
+#ifndef _NO_PROC
 static void _d_error_mem(int64_t m) {
   if (m < 1000) {
     fprintf(stderr, "%ld", m);
@@ -30,7 +30,7 @@ static void _d_error_mem(int64_t m) {
     fprintf(stderr, ",%03ld", m % 1000);
   }    
 }
-#endif // D_HAVE_PROC
+#endif // _NO_PROC
 #endif // NDEBUG
 
 void _d_error(int status, int errnum, const char *format, ...) {
@@ -39,19 +39,19 @@ void _d_error(int status, int errnum, const char *format, ...) {
   putc('[', stderr);
   double c = (double) clock() / CLOCKS_PER_SEC;
   _d_error_clock(c);
-#if D_HAVE_MUSABLE
+#ifndef _NO_MUSABLE
   putc(' ', stderr);
   _d_error_mem(_d_memsize);
-#endif // D_HAVE_MUSABLE
-#if D_HAVE_PROC
+#endif // _NO_MUSABLE
+#ifndef _NO_PROC
   putc(' ', stderr);
   char *tok[23];
   forline(l, "/proc/self/stat") {
-    split(l, ' ', tok, 23); break;
+    split(l, " ", tok, 23); break;
   }
   _d_error_mem(strtoul(tok[22], NULL, 10));
   putc('b', stderr);
-#endif // D_HAVE_PROC
+#endif // _NO_PROC
   fputs("] ", stderr);
 #endif // NDEBUG
   va_list args;
@@ -75,7 +75,7 @@ void *_d_malloc(size_t size) {
   if (ptr == NULL) 
     die("Cannot allocate %zu bytes", size);
 #ifndef NDEBUG
-#if D_HAVE_MUSABLE
+#ifndef _NO_MUSABLE
   _d_memsize += malloc_usable_size(ptr);
 #endif
 #endif
@@ -87,7 +87,7 @@ void *_d_calloc(size_t nmemb, size_t size) {
   if (ptr == NULL) 
     die("Cannot allocate %zu bytes", nmemb*size);
 #ifndef NDEBUG
-#if D_HAVE_MUSABLE
+#ifndef _NO_MUSABLE
   _d_memsize += malloc_usable_size(ptr);
 #endif
 #endif
@@ -96,7 +96,7 @@ void *_d_calloc(size_t nmemb, size_t size) {
 
 void *_d_realloc(void *ptr, size_t size) {
 #ifndef NDEBUG
-#if D_HAVE_MUSABLE
+#ifndef _NO_MUSABLE
   _d_memsize -= malloc_usable_size(ptr);
 #endif
 #endif
@@ -104,7 +104,7 @@ void *_d_realloc(void *ptr, size_t size) {
   if (ptr2 == NULL) 
     die("Cannot allocate %zu bytes", size);
 #ifndef NDEBUG
-#if D_HAVE_MUSABLE
+#ifndef _NO_MUSABLE
   _d_memsize += malloc_usable_size(ptr2);
 #endif
 #endif
@@ -113,7 +113,7 @@ void *_d_realloc(void *ptr, size_t size) {
 
 void _d_free(void *ptr) {
 #ifndef NDEBUG
-#if D_HAVE_MUSABLE
+#ifndef _NO_MUSABLE
   // This may fail if multithreaded  
   // assert(_d_memsize >= malloc_usable_size(ptr));
   _d_memsize -= malloc_usable_size(ptr);
@@ -131,7 +131,7 @@ struct _D_FILE_S {
   char *line;
 };
 
-#if D_HAVE_POPEN
+#ifndef _NO_POPEN
 static char *_d_uncompress(const char *f) {
   size_t n = strlen(f);
   char *z = NULL;
@@ -157,7 +157,7 @@ _D_FILE _d_open(const char *f) {
   if (f == NULL) {
     p->fptr = stdin;
     p->type = _D_STDIN;
-#if D_HAVE_POPEN
+#ifndef _NO_POPEN
   } else if (*f == '<') {
     p->fptr = popen(f+1, "r");
     p->type = _D_POPEN;
@@ -180,7 +180,7 @@ void _d_close(_D_FILE p) {
   free(p->line);		// may be reallocated by getline
   switch(p->type) {
   case _D_FOPEN: fclose(p->fptr); break;
-#if D_HAVE_POPEN
+#ifndef _NO_POPEN
   case _D_POPEN: pclose(p->fptr); break;
 #endif
   default: break;
@@ -190,7 +190,7 @@ void _d_close(_D_FILE p) {
 
 char *_d_gets(_D_FILE p) {
   if (p == NULL) return NULL;
-#if D_HAVE_GETLINE
+#ifndef _NO_GETLINE
   ssize_t rgetline = getline(&(p->line), &(p->size), p->fptr);
   return ((rgetline == -1) ? NULL : p->line);
 #endif
@@ -221,6 +221,29 @@ char *_d_gets(_D_FILE p) {
   } else {
     return p->line;
   }
+}
+
+size_t split(char *str, const char *delim, char **argv, size_t argv_len) {
+  if (argv_len == 0) return 0;
+  argv[0] = str;
+  size_t numtokens = 1;
+  if (delim[0] == 0) {		// only one token if there is no delim
+    // noop
+  } else if (delim[1] == 0) {	// handle single character with faster strchr
+    int sep = *delim;
+    for (char *p = strchr(str, sep); p != NULL; p = strchr(p, sep)) {
+      *p++ = '\0';
+      if (numtokens == argv_len) break;
+      argv[numtokens++] = p;
+    }
+  } else {			// handle multiple characters with strpbrk
+    for (char *p = strpbrk(str, delim); p != NULL; p = strpbrk(p, delim)) {
+      *p++ = '\0';
+      if (numtokens == argv_len) break;
+      argv[numtokens++] = p;
+    }
+  }
+  return numtokens;
 }
 
 size_t fnv1a(const char *k) {
@@ -290,16 +313,16 @@ static darr_t _d_symtable;
 #define _d_mkzero(u) ((u)=0)
 
 static sym_t _d_syminit(const str_t s) {
-  if (_d_strtable == NULL) _d_strtable = darr_new(0, sizeof(str_t));
+  if (_d_strtable == NULL) _d_strtable = darr(0, str_t);
   size_t l = len(_d_strtable);
-  val(str_t, _d_strtable, l) = dstrdup(s);
+  val(_d_strtable, l, str_t) = dstrdup(s);
   return l+1;
 }
 
-D_HASH(_d_sym, sym_t, str_t, d_strmatch, fnv1a, _d_sym2str, _d_syminit, _d_iszero, _d_mkzero)
+D_HASH(_d_sym, sym_t, str_t, _d_sym2str, d_strmatch, fnv1a, _d_syminit, _d_iszero, _d_mkzero)
 
 sym_t str2sym(const str_t str, bool insert) {
-  if (_d_symtable == NULL) _d_symtable = _d_symnew(0);
+  if (_d_symtable == NULL) _d_symtable = darr(0, sym_t);
   sym_t *p = _d_symget(_d_symtable, str, insert);
   return ((p == NULL) ? 0 : (*p));
 }
@@ -313,7 +336,7 @@ str_t sym2str(sym_t sym) {
 }
 
 void symtable_free() {
-  _d_symfree(_d_symtable); _d_symtable = NULL;
+  darr_free(_d_symtable); _d_symtable = NULL;
   darr_free(_d_strtable); _d_strtable = NULL;
 }
 
@@ -325,3 +348,24 @@ void symdbg() {
   msg("symcap=%lu", _d_symtable == NULL ? 0 : cap(_d_symtable));
   msg("symlen=%lu", _d_symtable == NULL ? 0 : len(_d_symtable));
 }
+
+/* darr_t support code */
+
+/* Define initializer and destructor.  nmemb=0 is a valid input, in
+   which case log2(cap)=b=0, cap=c=1.  len=0 always.  */
+
+darr_t _d_darr(size_t nmemb, size_t esize) {
+  if (nmemb >= (1ULL << _D_LENBITS))
+    die("darr_t cannot hold more than %lu elements.", (1ULL<<_D_LENBITS));
+  darr_t a = _d_malloc(sizeof(struct darr_s));
+  size_t b; for (b = 0; (1ULL << b) < nmemb; b++);		
+  a->bits = (b << _D_LENBITS);					
+  size_t c = (1ULL << b);					
+  a->data = _d_malloc(c * esize);
+  return a;							
+}
+
+void darr_free(darr_t a) {
+  _d_free(a->data); _d_free(a);
+}
+
