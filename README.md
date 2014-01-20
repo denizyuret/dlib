@@ -2,16 +2,15 @@ dlib: Deniz's C Library
 ===========================
 (c) 2004-2014, Deniz Yuret (denizyuret@gmail.com)
 
-**Work in progress, do not trust this documentation yet!**
 
 Contents
 --------
 * [Introduction](#introduction)
 * [Compilation](#compilation)
-* [Error reporting](#error-reporting)
 * [File input](#file-input)
 * [Tokenization](#tokenization)
 * [Dynamic arrays](#dynamic-arrays)
+* [Hash tables](#hash-tables)
 
 
 Introduction
@@ -54,7 +53,7 @@ as concise:
 
 	forline (str, NULL) {
 	  fortok (tok, str) {
-	    hval(hash, tok)->cnt++;
+	    cnt(tok)++;
 	  }
 	}
 
@@ -79,28 +78,6 @@ want these extensions:
 	_NO_PROC	Do not use the proc filesystem for memory reporting.
 	_NO_MUSABLE	Do not use GNU malloc_usable_size for memory reporting.
 	NDEBUG		Turn off debug output and assert checks (from assert.h).
-
-Error reporting
--------------------
-
-`msg` writes runtime and memory info, a formatted string, and any system
-error message to stderr.  For example:
-
-	msg("Cannot open %s", fname);
-
-may print:
-
-	[1.23s 4,012 6,365b] Cannot open foo: No such file or directory
-
-Inside the brackets `1.23s` indicates the output of `clock()`
-converted to seconds, `4,012` is the number of bytes allocated using
-dlib memory allocation routines, and `6,365b` is the virtual memory
-size reported by `/proc/self/stat`.  All of this can be turned off by
-compiling with `-DNDEBUG`.
-
-`dbg` is similar to `msg`, except it does nothing if `NDEBUG` is defined.
-
-`die` is similar to `msg`, except it exits the program after reporting.
 
 File input
 --------------
@@ -218,4 +195,91 @@ much power to the user to shoot themselves in the foot.  A read access
 to a never initialized element will return a random value.  An
 accidental read or write to a very large index may blow up the memory.
 Oh well, don't do it.
+
+Hash tables
+---------------
+
+Hash tables are implemented as dynamic arrays (`darr_t`) with some
+search logic.  You can initialize and free a hash table using `darr`
+and `darr_free` exactly like you do with dynamic arrays.  The macro
+`D_HASH` defines an inline function `xget` (the prefix `x` is user
+specified) that searches the array for an element matching a given key
+and returns a pointer to it:
+
+	etype *xget(darr_t htable, ktype key, bool insert);
+
+The `etype` and `ktype` are user specified types for array elements
+and their keys respectively.  The boolean argument `insert` determines
+what happens when a matching element cannot be found.  If `insert ==
+true` one will be created (in a user specified manner) and added to
+the array and `xget` will return its pointer.  If `insert == false`,
+`xget` will return `NULL`.
+
+	forhash(etype, eptr, htable, isnull)
+
+is an iteration construct for hash tables which executes the
+statements in its body with `etype *eptr` bound to each element of
+`darr_t htable` for which the macro or function `isnull` returns
+`false`.
+
+In order to define the `xget` function, the macro `D_HASH` takes
+the following nine arguments (I am open to suggestions to reduce this
+number).  The last six can be macros (preferrable) or functions.
+
+* prefix: The prefix added to `get` to allow multiple hash table types (e.g. `x` for `xget`).
+* etype: Type of array element.
+* ktype: Type of key.
+* keyof: `ktype keyof(etype e)` returns the key for element `e`.
+* kmatch: `bool kmatch(ktype a, ktype b)` returns true if two keys match.
+* khash: `size_t khash(ktype k)` is a hash function for keys.
+* einit: `etype einit(ktype k)` returns a new element with key matching `k`.
+* isnull: `bool isnull(etype e)` returns true if array element `e` is empty.
+* mknull: `void mknull(etype e)` modifies array element `e` to become empty.
+
+**NOTE:** This horribly convoluted interface is necessary to have a
+general enough implementation that can support sets (where the key and
+the element are one and the same) and maps (where the key is a
+function of the element); element types that are primitive
+(`uint32_t`, `char*`) or compound (structs, bit-fields), keys
+that can be components of compound elements (`e.key`) or
+arbitrary functions of primitive ones (`e & mask`), arrays that
+store the elements themselves or their pointers etc.  It is not
+intended for daily use.  Think of it as your hash table code
+generator.  Once you correctly generate the code for the few hash
+table types you use, you will hopefully never need `D_HASH` again.
+
+Here is an example hash table for counting strings:
+
+	#include <stdio.h>
+	#include "dlib.h"
+	
+	typedef struct strcnt_s { char *key; size_t cnt; } strcnt_t;
+	#define keyof(e) ((e).key)
+	extern size_t fnv1a(const char *k);  // string hash fn defined in dlib
+	#define strmatch(a,b) (!strcmp((a),(b)))
+	#define newcnt(k) ((strcnt_t) { strdup(k), 0 })
+	#define keyisnull(e) ((e).key == NULL)
+	#define keymknull(e) ((e).key = NULL)
+	
+	D_HASH(s, strcnt_t, char *, keyof, strmatch, fnv1a, newcnt, keyisnull, keymknull)
+	
+Given the function `sget` defined by `D_HASH` above, we can now write
+our word counting example from the introduction.
+
+	#define cnt(k) sget(htable, (k), true)->cnt
+
+	int main() {
+	  darr_t htable = darr(0, strcnt_t);
+	  forline (str, NULL) {
+	    fortok (tok, str) {
+	      cnt(tok)++;
+	    }
+	  }
+
+And print the counts:
+
+	  forhash (strcnt_t, e, htable, keyisnull) {
+	    printf("%s\t%lu\n", e->key, e->cnt);
+	  }
+	}
 
