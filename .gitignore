@@ -3,6 +3,8 @@ unused/
 download/
 doc/
 *~
+.htaccess
+README.html
 
 # -save-temps
 *.i
