@@ -179,7 +179,7 @@ It modifies and tokenizes `s` the same way `strtok` does, but unlike
 `strtok` it is reentry safe (i.e. multiple nested `fortok` loops are
 ok).  `fortok3(t, s, d)` takes an additional character array `d` to
 specify delimiter characters any one of which will act as a delimiter.
-`fortok(t, s)` is equivalent to `fortok3(t, s, "\f\n\r\t\v")`.
+`fortok(t, s)` is equivalent to `fortok3(t, s, " \f\n\r\t\v")`.
 Examples:
 
 	char *str = strdup("  To be    or not");
