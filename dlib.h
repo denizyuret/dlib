@@ -45,7 +45,7 @@ you express most often can be written concisely (human languages and
 compression algorithms use the same trick).  And of course as with
 every modern language these days Perl has built in dynamic arrays,
 hashes, and regexps and makes them practical to use with its concise
-syntax.  This is my feeable, incomplete, and evolving attempt to
+syntax.  This is my feeble, incomplete, and evolving attempt to
 import some of these ideas into C.  Among other things, dlib
 introduces some iteration constructs for file I/O and string
 tokenization and built-in hashes to make programs of this sort almost
