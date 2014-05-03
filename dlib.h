@@ -326,7 +326,7 @@ supposed to:
 	int x = val(a, i, int);	  // get an element
 	val(a, i, int)++;         // increment an element
 	int *p = &val(a, i, int); // get a pointer to an element
-	val(a, len(a), int) = 5;  // !!! BUGGY !!! add a new element, increments len(a)
+	val(a, len(a), int) = 5;  // add a new element, increments len(a)
 
 The user can request or set any index of a `darr_t` from `0` to
 `(1<<58-1)`.  The `darr_t` will never complain and resize itself to
@@ -337,33 +337,29 @@ to a never initialized element will return a random value.  An
 accidental read or write to a very large index may blow up the memory.
 Oh well, don't do it.
 
-BUG: val evaluates its second argument twice.  So if the second
-argument has a side effect (e.g. n++ or len(a)), the code will not do
-what you want.  This means the last example above is not working.  As
-these are common use cases I need to find a way to fix this.  Until
-then only use a plain variable as second argument of val.
-
 */
 
-#define val(_a,_i,_t) (((_t*)(_d_boundcheck((_a),(_i),sizeof(_t))->data))[_i])
+#define val(_a,_i,_t) (*((_t*)_d_boundcheck((_a),(_i),sizeof(_t))))
 
 #define _d_dblcap(a) ((a)->bits += (1ULL << _D_LENBITS))
 #define _d_inclen(a) ((a)->bits++)
 #define _d_setlen(a,l) ((a)->bits = ((((a)->bits >> _D_LENBITS) << _D_LENBITS) | (l)))
 
-static inline darr_t _d_boundcheck(darr_t a, size_t i, size_t esize) {
-  if (i < len(a)) return a;
-  if (i >= (1ULL << _D_LENBITS))
-    die("darr_t cannot hold more than %lu elements.", (1ULL<<_D_LENBITS));
-  _d_setlen(a, i + 1);
-  size_t c = cap(a);
-  if (i < c) return a;
-  do {
-    c <<= 1;
-    _d_dblcap(a);
-  } while (i >= c);
-  a->data = _d_realloc(a->data, c * esize);
-  return a;
+static inline ptr_t _d_boundcheck(darr_t a, size_t i, size_t esize) {
+  if (i >= len(a)) {
+    if (i >= (1ULL << _D_LENBITS))
+      die("darr_t cannot hold more than %lu elements.", (1ULL<<_D_LENBITS));
+    _d_setlen(a, i + 1);
+    size_t c = cap(a);
+    if (i >= c) {
+      do {
+	c <<= 1;
+	_d_dblcap(a);
+      } while (i >= c);
+      a->data = _d_realloc(a->data, c * esize);
+    }
+  }
+  return (((char *)(a->data)) + i * esize);
 }
 
 /** Hash tables
