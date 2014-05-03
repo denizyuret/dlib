@@ -370,3 +370,13 @@ void darr_free(darr_t a) {
   _d_free(a->data); _d_free(a);
 }
 
+/* darr dbg code: to use len, cap, val in debugger */
+
+size_t dbglen(darr_t a) { return len(a); }
+size_t dbgcap(darr_t a) { return cap(a); }
+
+ptr_t dbgval(darr_t a, size_t i, size_t sz) {
+  if (i >= len(a)) return NULL;
+  char *d = a->data;
+  return &d[i * sz];
+}
