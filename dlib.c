@@ -47,9 +47,10 @@ void _d_error(int status, int errnum, const char *format, ...) {
   putc(' ', stderr);
   char *tok[23];
   forline(l, "/proc/self/stat") {
-    split(l, " ", tok, 23); break;
+    split(l, " ", tok, 23); 
+    _d_error_mem(strtoul(tok[22], NULL, 10));
+    break;
   }
-  _d_error_mem(strtoul(tok[22], NULL, 10));
   putc('b', stderr);
 #endif // _NO_PROC
   fputs("] ", stderr);
