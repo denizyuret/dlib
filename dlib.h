@@ -524,10 +524,10 @@ extern size_t fnv1a(const char *k);
 
 /* These use the old interface
 #define D_STRHASH(h, etype, einit) \
-  D_HASH(h, etype, str_t, d_strmatch, fnv1a, d_keyof, einit, d_keyisnull, d_keymknull)
+  D_HASH(h, etype, str_t, d_keyof, d_strmatch, fnv1a, einit, d_keyisnull, d_keymknull)
 
 #define D_STRSET(h) \
-  D_HASH(h, str_t, str_t, d_strmatch, fnv1a, d_ident, dstrdup, d_isnull, d_mknull)
+  D_HASH(h, str_t, str_t, d_ident, d_strmatch, fnv1a, dstrdup, d_isnull, d_mknull)
 */
 
 /* symbol table: symbols are represented with uint32_t > 0.  str2sym
