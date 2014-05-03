@@ -326,7 +326,7 @@ supposed to:
 	int x = val(a, i, int);	  // get an element
 	val(a, i, int)++;         // increment an element
 	int *p = &val(a, i, int); // get a pointer to an element
-	val(a, len(a), int) = 5;  // add a new element, increments len(a)
+	val(a, len(a), int) = 5;  // !!! BUGGY !!! add a new element, increments len(a)
 
 The user can request or set any index of a `darr_t` from `0` to
 `(1<<58-1)`.  The `darr_t` will never complain and resize itself to
@@ -336,6 +336,12 @@ much power to the user to shoot themselves in the foot.  A read access
 to a never initialized element will return a random value.  An
 accidental read or write to a very large index may blow up the memory.
 Oh well, don't do it.
+
+BUG: val evaluates its second argument twice.  So if the second
+argument has a side effect (e.g. n++ or len(a)), the code will not do
+what you want.  This means the last example above is not working.  As
+these are common use cases I need to find a way to fix this.  Until
+then only use a plain variable as second argument of val.
 
 */
 
