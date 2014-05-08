@@ -245,6 +245,7 @@ extern int64_t _d_memsize;
 extern void *_d_malloc(size_t size);
 extern void *_d_calloc(size_t nmemb, size_t size);
 extern void *_d_realloc(void *ptr, size_t size);
+extern char *_d_strdup(const char *s);
 extern void _d_free(void *ptr);
 
 

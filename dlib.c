@@ -83,6 +83,16 @@ void *_d_malloc(size_t size) {
   return ptr;
 }
 
+char *_d_strdup(const char *s) {
+  char *a = strdup(s);
+#ifndef NDEBUG
+#ifndef _NO_MUSABLE
+  _d_memsize += malloc_usable_size(a);
+#endif
+#endif
+  return a;
+}
+
 void *_d_calloc(size_t nmemb, size_t size) {
   void *ptr = calloc(nmemb, size);
   if (ptr == NULL) 
